@@ -1,0 +1,243 @@
+#include <stdint.h>
+#include <avr/pgmspace.h>
+#include <avr/interrupt.h>
+#include "display.h"
+#include "mygccdef.h"
+#include "main.h"
+#include "mso.h"
+
+Disp_data Disp_send;
+uint8_t   u8CursorX, u8CursorY;
+
+
+// Clear display buffer
+void clr_display(void) {
+    for(uint16_t i=0; i<DISPLAY_DATA_SIZE; i++) Disp_send.display_data[i]=0;
+    lcd_goto(0,0);
+}
+
+void GLCD_setting(void) {
+    cli();
+    if(testbit(Display, flip)) {
+        LcdInstructionWrite(LCD_SET_SCAN_NOR);   // direction
+        LcdInstructionWrite(LCD_SET_SEG_REMAP1);
+    }
+    else {
+        LcdInstructionWrite(LCD_SET_SCAN_FLIP);   // direction
+        LcdInstructionWrite(LCD_SET_SEG_REMAP0);
+    }
+    if(testbit(Display, disp_inv)) LcdInstructionWrite(LCD_DISP_REV);   // invert
+    else LcdInstructionWrite(LCD_DISP_NOR);   // no invert
+    sei();
+}
+
+// Sprites, each byte pair represents next pixel relative position
+void sprite(uint8_t x, uint8_t y, const int8_t *ptr) {
+    do {
+        int8_t a=pgm_read_byte(ptr++);  // Get next x
+        int8_t b=pgm_read_byte(ptr++);  // Get next y
+        if((uint8_t)a==255) return;     // 255 marks the end of the sprite
+        set_pixel(x+a,y+b);
+    } while(1);
+}
+
+//-----------------------------------------------------------------------
+void lcd_line(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2) {
+    uint8_t dxabs,dyabs;
+    int8_t dx,dy,stepx,stepy;
+    dx=(int8_t)x2-x1;      // the horizontal distance of the line
+    dy=(int8_t)y2-y1;      // the vertical distance of the line
+    if(dy<0) { dyabs=-dy; stepy=-1; }
+    else { dyabs=dy; stepy=1; }
+    if(dx<0) { dxabs=-dx; stepx=-1; }
+    else {dxabs=dx; stepx=1; }
+    set_pixel(x1,y1);
+    if (dxabs>=dyabs) { // the line is more horizontal than vertical
+        uint8_t e=(uint8_t)(dxabs>>1);
+        for(uint8_t i=0;i<dxabs;i++) {
+            e+=dyabs;
+            if (e>=dxabs) {
+                e-=dxabs;
+                y1+=stepy;
+            }
+            x1+=stepx;
+            set_pixel(x1,y1);
+        }
+    }
+    else {  // the line is more vertical than horizontal
+        uint8_t e=(uint8_t)(dyabs>>1);
+        for(uint8_t i=0;i<dyabs;i++) {
+            e+=dxabs;
+            if (e>=dyabs) {
+                e-=dyabs;
+                x1+=stepx;
+            }
+            y1+=stepy;
+            set_pixel(x1,y1);
+        }
+    }
+}
+
+// Print a char on the display using the 3x6 font
+void putchar3x6(char u8Char) {
+    uint16_t pointer;
+	uint8_t data;
+	pointer = (unsigned int)(Font3x6)+(u8Char-20)*(3);
+    if(u8Char!='\n') {
+        uint8_t u8CharColumn=0;
+       	/* Draw a char */
+    	while (u8CharColumn < 3)	{
+            data = pgm_read_byte_near(pointer++);
+		    if(testbit(Misc,negative)) data = ~(data|128);
+		    display_or(data);
+		    u8CharColumn++;
+	    }
+    }
+    // Special characters
+    if(u8Char==0x1C) {       // Begin long 'd' character
+        display_or(0x30);
+    }
+    else if(u8Char==0x1D) {  // Complete long 'd' character
+        display_or(0x38);
+        u8CursorX++;
+    }
+    else if(u8Char==0x1A) {  // Complete long 'm' character
+        display_or(0x08);
+    }
+    else if(u8CursorX < 128) {  // if not then insert a space before next letter
+		data = 0;
+		if(testbit(Misc,negative)) data = 127;
+		display_or(data);
+	}
+    if(u8CursorX>=128 || u8Char=='\n') {    // Next line
+        u8CursorX = 0; u8CursorY++;
+    }
+}
+
+// Print a char on the display using the 10x15 font
+void putchar10x15(char u8Char) {
+	if(u8Char=='.') {           // Small point to Save space
+		display_or(0x60);
+		display_or(0x60);
+		u8CursorX+=2;
+	}
+	else if(u8Char=='-') {      // Negative sign
+		display_or(0x03);
+		display_or(0x03);
+		display_or(0x03);
+		display_or(0x03);
+		u8CursorX+=2;
+    }
+	else if(u8Char==' ') {      // Space
+		u8CursorX+=6;
+    }
+	else {                      // Number
+        uint8_t i=0;
+        uint16_t pointer = (unsigned int)(Font10x15)+(u8Char)*20;
+		// Upper side
+		u8CursorY--;
+		while (i < 10) { display_or(pgm_read_byte_near(pointer++)); i++; }
+		i=0;
+		// Lower Side
+		u8CursorY++;
+		u8CursorX-=10;
+		while (i < 10) { display_or(pgm_read_byte_near(pointer++)); i++; }
+        u8CursorX+=2;
+	}
+}
+
+// Print a string in program memory to the display
+void print3x6(const char *ptr) {
+    char c;
+    while ((c=pgm_read_byte(ptr++)) != 0x00) {
+        putchar3x6(c);
+    }
+}
+
+// Print Number using  the 3x6 font
+void printN3x6(uint8_t Data) {
+    uint8_t d=0x30;
+	while (Data>=100)	{ d++; Data-=100; }
+    if(d>0x30) putchar3x6(d);
+	d=0x30;
+	while (Data>=10)	{ d++; Data-=10; }
+    putchar3x6(d);
+    putchar3x6(Data+0x30);
+}
+
+// Prints a HEX number
+void printhex3x6(uint8_t n) {
+    uint8_t temp;
+    temp = n>>4;   putchar3x6(NibbleToChar(temp));
+    temp = n&0x0F; putchar3x6(NibbleToChar(temp));
+}
+
+extern const uint16_t milivolts[];
+
+// Print Voltage, multiply by 10 if using the x10 probe
+void printV(int16_t Data, uint8_t gain, uint8_t CHCtrl) {
+    int32_t Data32 = (int32_t)Data*milivolts[gain];
+    if(testbit(CHCtrl,x10)) Data32*=10;
+    printF(u8CursorX,u8CursorY,Data32/8);
+}    
+
+// Print Fixed point Number with 5 digits
+// or Print Long integer with 7 digits
+void printF(uint8_t x, uint8_t y, int32_t Data) {
+	uint8_t D[8]={0,0,0,0,0,0,0,0},point=0;
+    lcd_goto(x,y);
+    if(Data<0) {
+        Data=-Data;
+        if(testbit(Misc,bigfont)) putchar10x15('-');
+        else putchar3x6('-');
+    }
+    else {
+        if(testbit(Misc,bigfont)) putchar10x15(' ');
+        else putchar3x6(' ');
+    }
+    if(testbit(Misc,negative)) {   // 7 digit display
+        point=3;
+    }
+    else {  // 4 digit display
+	    if(Data>=999900000L) Data = 9999;
+	    else if(Data>=100000000L)  Data = (Data/100000);
+	    else if(Data>=10000000L) {
+    	    Data = (Data/10000);
+    	    point = 1;
+	    }
+	    else if(Data>=1000000L) {
+    	    Data = (Data/1000);
+    	    point = 2;
+	    }
+	    else {
+    	    Data = (Data/100);
+    	    point = 3;
+	    }
+    }
+    
+    uint8_t i=7;
+    do {    // Decompose number
+        uint32_t power;
+        power=pgm_read_dword_near(Powersof10+i);
+        while(Data>=power) { D[i]++; Data-=power; }
+    } while(i--);
+
+    if(testbit(Misc, negative)) i=7;    // To print all digits
+    else i=3;
+	for(; i!=255; i--) {
+		if(testbit(Misc,bigfont)) {
+			putchar10x15(D[i]);
+			if(point==i) putchar10x15('.');
+		}
+		else {
+			putchar3x6(0x30+D[i]);
+			if(point==i) putchar3x6('.');
+		}
+	}
+}
+
+// Print small font text at x,y from program memory
+void tiny_printp(uint8_t x, uint8_t y, const char *ptr) {
+    lcd_goto(x,y);
+    print3x6(ptr);
+}
