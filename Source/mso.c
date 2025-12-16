@@ -2362,7 +2362,7 @@ void MSO(void) {
 
 void AutoSet(void) {
     clrbit(MStatus,stop);
-    // Set Free Trigger
+    // Set Free Trigger by clearing normal, single and autotrg flags
     clrbit(Trigger, normal);    // Clear Normal trigger
     clrbit(Trigger, single);    // Clear Single trigger
     clrbit(Trigger, autotrg);   // Clear Auto trigger
@@ -3074,7 +3074,7 @@ void StartDMAs(void) {
     DMA.CH0.ADDRCTRL  = 0b00000101;         // Source fixed, incr dest, reload dest @ end block
     DMA.CH0.TRIGSRC   = 0x10;               // ADCA CH0 is trigger source
     DMA.CH0.TRFCNT    = 512;                // buffer size
-    DMA.CH0.DESTADDR0 = (((uint16_t) T.IN.CH1)>>0*8) & 0xFF;
+    DMA.CH0.DESTADDR0 = (((uint16_t) T.IN.CH1)    ) & 0xFF;
     DMA.CH0.DESTADDR1 = (((uint16_t) T.IN.CH1)>>1*8) & 0xFF;
 //    DMA.CH0.DESTADDR2 = 0;
     DMA.CH0.SRCADDR0  = (((uint16_t)(&ADCA.CH0.RESL))>>0*8) & 0xFF;
@@ -3085,10 +3085,10 @@ void StartDMAs(void) {
     DMA.CH2.ADDRCTRL  = 0b00000101;         // Source fixed, incr dest, reload dest @ end block
     DMA.CH2.TRIGSRC   = 0x10;               // ADCA CH0 is trigger source
     DMA.CH2.TRFCNT    = 512;                // buffer size
-    DMA.CH2.DESTADDR0 = (((uint16_t) T.IN.CHD)>>0*8) & 0xFF;
+    DMA.CH2.DESTADDR0 = (((uint16_t) T.IN.CHD)    ) & 0xFF;
     DMA.CH2.DESTADDR1 = (((uint16_t) T.IN.CHD)>>1*8) & 0xFF;
 //    DMA.CH2.DESTADDR2 = 0;
-    DMA.CH2.SRCADDR0  = (((uint16_t)(&VPORT2.IN))>>0*8) & 0xFF;
+    DMA.CH2.SRCADDR0  = (((uint16_t)(&VPORT2.IN))    ) & 0xFF;
     DMA.CH2.SRCADDR1  = (((uint16_t)(&VPORT2.IN))>>1*8) & 0xFF;
 //    DMA.CH2.SRCADDR2  = 0;
     DMA.CH2.CTRLA     = 0b00100100;         // repeat, 1 byte burst
@@ -3096,10 +3096,10 @@ void StartDMAs(void) {
     DMA.CH1.ADDRCTRL  = 0b00000101;         // Source fixed, incr dest, reload dest @ end block
     DMA.CH1.TRIGSRC   = 0x11;               // ADCA CH1 is trigger source
     DMA.CH1.TRFCNT    = 512;                // buffer size
-    DMA.CH1.DESTADDR0 = (((uint16_t) T.IN.CH2)>>0*8) & 0xFF;
+    DMA.CH1.DESTADDR0 = (((uint16_t) T.IN.CH2)     ) & 0xFF;
     DMA.CH1.DESTADDR1 = (((uint16_t) T.IN.CH2)>>1*8) & 0xFF;
 //    DMA.CH1.DESTADDR2 = 0;
-    DMA.CH1.SRCADDR0  = (((uint16_t)(&ADCA.CH1.RESL))>>0*8) & 0xFF;
+    DMA.CH1.SRCADDR0  = (((uint16_t)(&ADCA.CH1.RESL))     ) & 0xFF;
     DMA.CH1.SRCADDR1  = (((uint16_t)(&ADCA.CH1.RESL))>>1*8) & 0xFF;
 //    DMA.CH1.SRCADDR2  = 0;
     DMA.CH1.CTRLA     = 0b00100100;     // repeat, 1 byte burst
