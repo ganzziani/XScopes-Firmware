@@ -116,34 +116,17 @@ void putchar3x6(char u8Char) {
 
 // Print a char on the display using the 10x15 font
 void putchar10x15(char u8Char) {
-	if(u8Char=='.') {           // Small point to Save space
-		display_or(0x60);
-		display_or(0x60);
-		u8CursorX+=2;
-	}
-	else if(u8Char=='-') {      // Negative sign
-		display_or(0x03);
-		display_or(0x03);
-		display_or(0x03);
-		display_or(0x03);
-		u8CursorX+=2;
-    }
-	else if(u8Char==' ') {      // Space
-		u8CursorX+=6;
-    }
-	else {                      // Number
-        uint8_t i=0;
-        uint16_t pointer = (unsigned int)(Font10x15)+(u8Char)*20;
-		// Upper side
-		u8CursorY--;
-		while (i < 10) { display_or(pgm_read_byte_near(pointer++)); i++; }
-		i=0;
-		// Lower Side
-		u8CursorY++;
-		u8CursorX-=10;
-		while (i < 10) { display_or(pgm_read_byte_near(pointer++)); i++; }
-        u8CursorX+=2;
-	}
+    uint8_t i=0;
+    uint16_t pointer = (unsigned int)(Font10x15)+(u8Char)*20;
+	// Upper side
+	u8CursorY--;
+	while (i < 10) { display_or(pgm_read_byte_near(pointer++)); i++; }
+	i=0;
+	// Lower Side
+	u8CursorY++;
+	u8CursorX-=10;
+	while (i < 10) { display_or(pgm_read_byte_near(pointer++)); i++; }
+    u8CursorX+=2;
 }
 
 // Print a string in program memory to the display
@@ -186,13 +169,21 @@ void printV(int16_t Data, uint8_t gain, uint8_t CHCtrl) {
 void printF(uint8_t x, uint8_t y, int32_t Data) {
 	uint8_t D[8]={0,0,0,0,0,0,0,0},point=0;
     lcd_goto(x,y);
-    if(Data<0) {
+    if(Data<0) {    // Negative sign
         Data=-Data;
-        if(testbit(Misc,bigfont)) putchar10x15('-');
+        if(testbit(Misc,bigfont)) { // putchar10x15('-');
+            display_or(0x03);
+            display_or(0x03);
+            display_or(0x03);
+            display_or(0x03);
+            u8CursorX+=2;
+        }            
         else putchar3x6('-');
     }
-    else {
-        if(testbit(Misc,bigfont)) putchar10x15(' ');
+    else {  // Space
+        if(testbit(Misc,bigfont)) { // putchar10x15(' ');
+            u8CursorX+=6;
+        }            
         else putchar3x6(' ');
     }
     if(testbit(Misc,negative)) {   // 7 digit display
@@ -227,7 +218,11 @@ void printF(uint8_t x, uint8_t y, int32_t Data) {
 	for(; i!=255; i--) {
 		if(testbit(Misc,bigfont)) {
 			putchar10x15(D[i]);
-			if(point==i) putchar10x15('.');
+			if(point==i) { // putchar10x15('.'); Small point to Save space
+                display_or(0x60);
+                display_or(0x60);
+                u8CursorX+=2;
+            }                
 		}
 		else {
 			putchar3x6(0x30+D[i]);
