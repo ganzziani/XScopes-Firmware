@@ -20,7 +20,6 @@ void putchar3x6 (char);
 void printN3x6(uint8_t Data);
 void clr_display(void);
 void sprite(uint8_t x, uint8_t y, const int8_t *ptr);
-void lcd_line(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2);
 void printV(int16_t Data, uint8_t gain, uint8_t CHCtrl);
 void printF(uint8_t x, uint8_t y, int32_t Data);
 void tiny_printp(uint8_t x, uint8_t y, const char *ptr);

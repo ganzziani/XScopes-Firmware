@@ -788,7 +788,7 @@ void MSO(void) {
                     if(temp1>DISPLAY_MAX_Y) temp1=DISPLAY_MAX_Y;
                     if(temp2>DISPLAY_MAX_Y) temp2=DISPLAY_MAX_Y;
                     if(testbit(Display, line)) {
-                        if(i==0) continue;
+                        if(i==0) continue;      // No "previous" sample yet
                         if((temp1!=och1) || (temp1 && och1<DISPLAY_MAX_Y))
                             if(testbit(CH1ctrl,chon))          lcd_line(i, temp1, prev, och1);
                         if((temp2!=och2) || (temp2 && och2<DISPLAY_MAX_Y))

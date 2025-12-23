@@ -59,7 +59,6 @@ void HEXSerial(void) {
     }
 }
 
-
 const uint8_t BAUDA[8] PROGMEM = {
     3,      // 1200
     1,      // 2400
@@ -94,46 +93,47 @@ const uint16_t TCC1val[8] PROGMEM = {
 };
 
 void LogicDMA(void) {
-	setbit(DMA.CH0.CTRLA,6);    // reset DMA CH0
-	setbit(DMA.CH1.CTRLA,6);    // reset DMA CH1
-
-	// Flush receive buffers
-	while(testbit(USARTC0.STATUS,7)) {
+    setbit(DMA.CH0.CTRLA,6);    // reset DMA CH0
+    setbit(DMA.CH1.CTRLA,6);    // reset DMA CH1
+    // Flush receive buffers
+    while(testbit(USARTC0.STATUS,7)) {
         (void)USARTC0.DATA;             // Dummy read to flush buffer
-	}
-	if(SPIC.STATUS) (void)SPIC.DATA;	// dummy read
+    }
+    if(SPIC.STATUS) (void)SPIC.DATA;	// dummy read
 
-	uint16_t src_addr;
+	uint8_t src_addr_lo;
+    uint8_t src_addr_hi;
 	uint8_t trig_src;
 
 	// Configure CH0 for RX data
-	DMA.CH0.ADDRCTRL  = 0b10000101;     // reload source addr after each burst, incr dest, reload dest end block
-	DMA.CH0.TRFCNT    = BUFFER_SERIAL;            // buffer size
+    DMA.CH0.ADDRCTRL  = 0b10000101;     // reload source addr after each burst, incr dest, reload dest end block
+    DMA.CH0.TRFCNT    = BUFFER_SERIAL;            // buffer size
 
 	// Set destination address for CH0 RX data (ensure proper casting)
-	DMA.CH0.DESTADDR0 = (((uint16_t) T.LOGIC.data.Serial.RX)     ) & 0xFF;
-	DMA.CH0.DESTADDR1 = (((uint16_t) T.LOGIC.data.Serial.RX)>>1*8) & 0xFF;
+    DMA.CH0.DESTADDR0 = (((uint16_t) T.LOGIC.data.Serial.RX)     ) & 0xFF;
+    DMA.CH0.DESTADDR1 = (((uint16_t) T.LOGIC.data.Serial.RX)>>1*8) & 0xFF;
 
 	// Configure based on protocol type (RS232 or SPI)
-	if(M.CHDdecode == rs232) {
-		trig_src   = 0x4B;               // USARTC0 trigger source
-		src_addr   = (uint16_t)(&USARTC0.DATA);
-	}
-	else if(M.CHDdecode == spi) {
-		trig_src   = 0x4A;               // SPIC trigger source
-		src_addr   = (uint16_t)(&SPIC.DATA);
-	}
+    if(M.CHDdecode == rs232) {
+        trig_src   = 0x4B;               // USARTC0 trigger source
+        src_addr_lo = (((uint16_t)(&USARTC0.DATA))     ) & 0xFF;
+        src_addr_hi = (((uint16_t)(&USARTC0.DATA))>>1*8) & 0xFF;
+    }
+    else if(M.CHDdecode == spi) {
+        trig_src   = 0x4A;               // SPIC trigger source
+        src_addr_lo = (((uint16_t)(&SPIC.DATA))     ) & 0xFF;
+        src_addr_hi = (((uint16_t)(&SPIC.DATA))>>1*8) & 0xFF;
+    }
+    DMA.CH0.TRIGSRC   = trig_src;
+    DMA.CH0.SRCADDR0  = src_addr_lo;
+    DMA.CH0.SRCADDR1  = src_addr_hi;
 
-	DMA.CH0.TRIGSRC   = trig_src;
-	DMA.CH0.SRCADDR0  = src_addr & 0xFF;
-	DMA.CH0.SRCADDR1  = (src_addr >> 8) & 0xFF;
-
-	// Set CH0 control register based on single sniff mode
-	if(testbit(Mcursors, singlesniff)) {
-		DMA.CH0.CTRLA     = 0b10000100;   // no repeat, 1 byte burst
-		} else {
-		DMA.CH0.CTRLA     = 0b10100100;   // repeat, 1 byte burst
-	}
+    // Set CH0 control register based on single sniff mode
+    if(testbit(Mcursors, singlesniff)) {
+        DMA.CH0.CTRLA     = 0b10000100;   // no repeat, 1 byte burst
+    } else {
+        DMA.CH0.CTRLA     = 0b10100100;   // repeat, 1 byte burst
+    }
 
     // For UART and SPI Sniffer, bit-bang / DMA:
     DMA.CH1.ADDRCTRL  = 0b10000101;     // reload source addr after each burst, incr dest, reload dest end block
