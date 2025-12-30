@@ -12,7 +12,12 @@ uint8_t   u8CursorX, u8CursorY;
 
 // Clear display buffer
 void clr_display(void) {
-    for(uint16_t i=0; i<DISPLAY_DATA_SIZE; i++) Disp_send.display_data[i]=0;
+    uint8_t *p = Disp_send.display_data;   // Locate pointer at start of data buffer;
+    uint8_t i=0;
+    do {    // Erase all 1024 bytes in the buffer
+        // Unroll inner loop for speed - Clear 4 lines
+        *p++=0; *p++=0; *p++=0; *p++=0;
+    } while(--i);
     lcd_goto(0,0);
 }
 
@@ -48,25 +53,23 @@ void putchar3x6(char u8Char) {
 	uint8_t data;
 	pointer = (unsigned int)(Font3x6)+(u8Char-20)*(3);
     if(u8Char!='\n') {
-        uint8_t u8CharColumn=0;
-       	/* Draw a char */
-    	while (u8CharColumn < 3)	{
+        // Draw a char: 3 bytes
+        for(uint8_t i=3; i; i--) {
             data = pgm_read_byte_near(pointer++);
 		    if(testbit(Misc,negative)) data = ~(data|128);
 		    display_or(data);
-		    u8CharColumn++;
 	    }
     }
     // Special characters
     if(u8Char==0x1C) {       // Begin long 'd' character
-        display_or(0x30);
+        display_or(FONT3x6_d1);
     }
     else if(u8Char==0x1D) {  // Complete long 'd' character
-        display_or(0x38);
+        display_or(FONT3x6_d2);
         u8CursorX++;
     }
     else if(u8Char==0x1A) {  // Complete long 'm' character
-        display_or(0x08);
+        display_or(FONT3x6_m);
     }
     else if(u8CursorX < 128) {  // if not then insert a space before next letter
 		data = 0;
@@ -76,21 +79,6 @@ void putchar3x6(char u8Char) {
     if(u8CursorX>=128 || u8Char=='\n') {    // Next line
         u8CursorX = 0; u8CursorY++;
     }
-}
-
-// Print a char on the display using the 10x15 font
-void putchar10x15(char u8Char) {
-    uint8_t i=0;
-    uint16_t pointer = (unsigned int)(Font10x15)+(u8Char)*20;
-	// Upper side
-	u8CursorY--;
-	while (i < 10) { display_or(pgm_read_byte_near(pointer++)); i++; }
-	i=0;
-	// Lower Side
-	u8CursorY++;
-	u8CursorX-=10;
-	while (i < 10) { display_or(pgm_read_byte_near(pointer++)); i++; }
-    u8CursorX+=2;
 }
 
 // Print a string in program memory to the display
@@ -132,21 +120,21 @@ void printV(int16_t Data, uint8_t gain, uint8_t CHCtrl) {
 // or Print Long integer with 7 digits
 void printF(uint8_t x, uint8_t y, int32_t Data) {
 	uint8_t D[8]={0,0,0,0,0,0,0,0},point=0;
+    uint8_t *DisplayPointer = &Disp_send.display_data[((uint16_t)(u8CursorY<<7)) + (u8CursorX)];
     lcd_goto(x,y);
-    if(Data<0) {    // Negative sign
+    if(Data<0) {    // Negative number: Print minus
         Data=-Data;
         if(testbit(Misc,bigfont)) { // putchar10x15('-');
-            display_or(0x03);
-            display_or(0x03);
-            display_or(0x03);
-            display_or(0x03);
-            u8CursorX+=2;
+            for(uint8_t i=4; i; i--) {
+                *DisplayPointer++ = 0x03;
+            }
+            DisplayPointer +=2; 
         }            
         else putchar3x6('-');
     }
-    else {  // Space
+    else {          // Positive number: Print space
         if(testbit(Misc,bigfont)) { // putchar10x15(' ');
-            u8CursorX+=6;
+            DisplayPointer+=6;
         }            
         else putchar3x6(' ');
     }
@@ -181,11 +169,24 @@ void printF(uint8_t x, uint8_t y, int32_t Data) {
     else i=3;
 	for(; i!=255; i--) {
 		if(testbit(Misc,bigfont)) {
-			putchar10x15(D[i]);
+            // putchar10x15();
+            uint8_t *TempPointer = DisplayPointer;
+            uint16_t FontPointer = (unsigned int)(Font10x15)+(D[i])*20;
+            // Upper side
+            DisplayPointer-=128;
+            for(uint8_t i=10; i; i--) {
+                *DisplayPointer++ = pgm_read_byte_near(FontPointer++);
+            }
+            // Lower Side
+            DisplayPointer = TempPointer;
+            for(uint8_t i=10; i; i--) {
+                *DisplayPointer++ = pgm_read_byte_near(FontPointer++);
+            }
+            DisplayPointer+=2;
 			if(point==i) { // putchar10x15('.'); Small point to Save space
-                display_or(0x60);
-                display_or(0x60);
-                u8CursorX+=2;
+                *DisplayPointer++ = 0x60;
+                *DisplayPointer++ = 0x60;
+                DisplayPointer+=2;
             }                
 		}
 		else {

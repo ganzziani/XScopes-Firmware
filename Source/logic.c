@@ -406,7 +406,7 @@ void DisplayData(uint8_t side, uint8_t page) {
             if(i>=index) break;
         }
         uint8_t data=p[i];
-        i++; if(i>=BUFFER_SERIAL) i=0;    // Increase data index        
+        i++; if(i>=BUFFER_SERIAL) i=0;    // Increase data index
         if(testbit(CHDctrl,ascii)) {
                  if(data==0x0A) putchar3x6(0x14); // Line Feed
             else if(data==0x0D) putchar3x6(0x15); // Carriage Return

@@ -743,9 +743,7 @@ void MSO(void) {
                 // i will scan display, j will scan data starting at M.HPos
                 for(i=0; i<128; i++, k++, j++) {
                     uint8_t chdpos, chddata;
-                    uint8_t och1,och2;
                     if(Srate>=11 && testbit(Mcursors,roll)) i=k>>1;
-                    och1=temp1; och2=temp2;
                     chddata = DC.CHDdata[j];
                     // Show Digital Data
                     chdpos = M.CHDpos;
@@ -780,6 +778,9 @@ void MSO(void) {
                         lcd_goto(i,chdpos>>3);
                         printhex3x6(chddata);
                     }
+                    // Store previous points
+                    uint8_t och1,och2;
+                    och1=temp1; och2=temp2;
                     // Apply position
                     temp1=addwsat(DC.CH1data[j],M.CH1pos);
                     temp2=addwsat(DC.CH2data[j],M.CH2pos);
@@ -788,7 +789,7 @@ void MSO(void) {
                     if(temp1>DISPLAY_MAX_Y) temp1=DISPLAY_MAX_Y;
                     if(temp2>DISPLAY_MAX_Y) temp2=DISPLAY_MAX_Y;
                     if(testbit(Display, line)) {
-                        if(i==0) continue;      // No "previous" sample yet
+                        if(i==0) continue;  // No previous sample
                         if((temp1!=och1) || (temp1 && och1<DISPLAY_MAX_Y))
                             if(testbit(CH1ctrl,chon))          lcd_line(i, temp1, prev, och1);
                         if((temp2!=och2) || (temp2 && och2<DISPLAY_MAX_Y))
@@ -1839,7 +1840,10 @@ void MSO(void) {
                 clr_display();
             }
             else {  // Only clear menu area (bottom of the display)
-                for(uint16_t i=896; i<1024; i++) Disp_send.display_data[i]=0;
+                uint8_t *p = &Disp_send.display_data[896];
+                for(uint8_t i=128; i; i--) {
+                    *p++=0;
+                }
             }
         }
         if(testbit(Misc,lowbatt)) {
@@ -2563,7 +2567,7 @@ cancelvdc:
                         printV((int16_t)CH1.vpp*128, M.CH1gain, CH1ctrl);
         lcd_goto(64,2); printV((int16_t)CH2.vpp*128, M.CH2gain, CH2ctrl);
     }
-    else {                          // Display frequency
+    else {                          // Measure frequency
         // TCC1:Lo16 TCE0:Hi16 TCC0:Timer
         // Event CH2:Input, Event CH4:TCC0 overflow, Event CH5:TCC1 overflow
         uint32_t freqv;

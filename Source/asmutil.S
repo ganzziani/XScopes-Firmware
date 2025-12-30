@@ -8,22 +8,22 @@
 ; Disp_send.display_data[((uint16_t)(y<<4)&0xFF80) + x] |= (uint8_t)(0x01 << (y & 0x07));
 .global set_pixel                   ; void setpixel(uint8_t x, uint8_t y);
 set_pixel:
-    ldi     r25,0x10	            ; r25 = 16
-    mul     r22,r25                 ; r1:r0 = y * 16
-    movw    r30,r0                  ; r31:r30 = r1:r0
+    ldi     r25, 16                 ; r25 = 16
+    mul     r22, r25                ; r1:r0 = y * 16
+    movw    r30, r0                 ; r31:r30 = r1:r0
     clr     r1                      ; r1 = 0, gcc needs r1 cleared
-    andi    r30,0x80                ; r30 &= 0b10000000 
+    andi    r30, 0x80               ; r30 &= 0b10000000 
     add     r30,r24                 ; r30 += x 
     subi    r30,lo8(-(Disp_send+3)) ; r31:r30 += Display data address
     sbci    r31,hi8(-(Disp_send+3))
-    andi    r22,0x07                ; y &= &0x07
-    ldi     r24,0x01                ; r24 = 1
-    rjmp    .+0x0002                ; Relative jump 
+    andi    r22, 0x07               ; y &= &0x07
+    ldi     r24, 0x01               ; r24 = 1
+    rjmp    .+2                     ; Skip first shift
 0:
     lsl     r24	                    ; r24 <<= 1
     dec     r22                     ; Decrement y
     brpl    0b                      ; repeat while y >= 0
-    las     z, r24                  ; OR bits in display data
+    las     z, r24                  ; Set bits in display data
     ret
 
 ; Disp_send.display_data[((uint16_t)(u8CursorY<<7)) + (u8CursorX++)] |= data;
@@ -39,7 +39,7 @@ display_or:                             ; OR byte on display buffer
     ror     r30                         ; put carry on r30 --> r31:r30 = u8CursorY*128 + u8CursorX + 1
     subi    r30,lo8(-(Disp_send+3))     ; r31:r30 += Display data address - 1
     sbci    r31,hi8(-(Disp_send+3))
-    las     z, r24                      ; OR bits in display data
+    las     z, r24                      ; Set bits in display data
     ret
 
 ; void lcd_line(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2)
@@ -63,7 +63,7 @@ lcd_line:
     ldi     r25, 0x10               ; r25 = 16
     mul     r22, r25                ; r1:r0 = y1 * 16
     movw    r30, r0                 ; Z = r1:r0
-    clr     r1
+    clr     r1                      ; Clear r1 for gcc
     andi    r30, 0x80               ; Z &= 0xFF80
     add     r30, r24                ; Z += x1
     subi    r30, lo8(-(Disp_send+3)); Z is at address 
@@ -72,14 +72,15 @@ lcd_line:
     ; Calculate initial bit mask: (1 << (y1 & 0x07))
     sub     r18, r22                ; Calculate dy before modyfying y1: r18 = dy = y2 - y1
     andi    r22, 0x07               ; y1 &= 0x07
-    ldi     r27, 0x01               ; bit mask = 1
-    rjmp    .+2                     ; Relative jump 
+    ldi     r27, 0x01               ; bit mask = 0x01
+    rjmp    .+2                     ; Skip first shift
 .L_mask_shift:
     lsl     r27                     ; mask <<= 1
     dec     r22
-    brpl    .L_mask_shift           ; This function is used in sequence to draw a waveform
-    mov     r0, r27                 ; Commented out since frist pixel since previous line function  already drew at this pixel
-    las     Z, r0                   ; So no need to draw it again. set initial pixel at x1,y1
+    brpl    .L_mask_shift
+    mov     r0, r27
+    las     Z, r0                   ; Set initial pixel at x1,y1
+
     ; Initialize x vars
     sub     r20, r24                ; r20 = dx = x2 - x1
     ldi     r25, 1                  ; stepx lo = 1
@@ -90,7 +91,7 @@ lcd_line:
     ldi     r25, -1                 ; stepx lo = -1
     ldi     r24, -1                 ; stepx hi = -1
     ; Initialize y vars
-    ;sub     r18, r22               ; Calculated previously
+    ;sub     r18, r22               ; dy calculated previously
     ldi     r26, 1                  ; stepy lo = 1
     ldi     r19, 0                  ; stepy hi = 0
     tst     r18                     ; test dy for zero or negative
@@ -98,8 +99,6 @@ lcd_line:
     neg     r18                     ; dyabs = -dy
     ldi     r26, -1                 ; stepy lo = -1
     ldi     r19, -1                 ; stepy hi = -1
-
-    mov     r22, r0
 
     cp      r20, r18                ; if (dxabs >= dyabs)
     brlo    .Vertical_line
@@ -137,7 +136,7 @@ lcd_line:
     add     r30, r25                ; Z = Z + stepx
     adc     r31, r24
     mov     r0, r27                 ; Copy mask to r0
-    las     Z, r0                   ; Atomic OR and write
+    las     Z, r0                   ; Set bits in display data
     dec     r21
     rjmp    .Horizontal_Loop
 
@@ -176,7 +175,7 @@ lcd_line:
     sbci    r31, 0                  ; Z = Z - 128
 .VerticalSetPixel:
     mov     r0, r27                 ; Copy mask to r0
-    las     Z, r0                   ; Atomic OR and write
+    las     Z, r0                   ; Set bits in display data
     dec     r21
     rjmp    .Vertical_Loop
 

@@ -3,6 +3,10 @@
 
 #include <stdint.h>
 
+#define FONT3x6_d1      0x30    // Long d character part 1
+#define FONT3x6_d2      0x38    // Long d character part 2
+#define FONT3x6_m       0x08    // End of long m character
+
 extern const uint8_t    Logo[];
 extern const uint8_t    Font3x6[];
 extern const uint8_t    Font10x15[];
