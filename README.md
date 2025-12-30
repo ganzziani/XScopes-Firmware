@@ -25,3 +25,13 @@ Main Features:
     Channel Math: add, multiply, invert, and average.
     Horizontal and Vertical Cursors with automatic waveform measurements, and waveform references.
     USB connectivity: Windows, Linux, MAC, Android
+
+Overall hardware block diagram:
+<img width="1152" height="644" alt="block_diagram1" src="https://github.com/user-attachments/assets/6e3b2a96-5775-4670-9c4b-7e0bb118d0ad" />
+
+System architecture:
+<img width="1152" height="865" alt="block_diagram2" src="https://github.com/user-attachments/assets/d11ea721-8a8b-46f6-adb0-a5151ff2d673" />
+
+Frequency Counter:
+<img width="1152" height="374" alt="block_diagram3" src="https://github.com/user-attachments/assets/fcd7b1bd-77ba-4a5d-b414-8ffe46d9d998" />
+
