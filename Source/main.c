@@ -1,47 +1,11 @@
-// TODO & Optimizations:
-/*      Custom bootloader
+// TODO & Optimizations
+/*      Custom bootloader:
             - Save constants tables in bootloader
             - Calibration in User Signature Row
-	    Crystal check
-        Gain Calibration
         Detect low voltage with comparator
-        Check if pretrigger samples completed with DMA (last part of mso.c)
-        Make Srate signed, so tests like Srate>=11 become Srate>=0
-        Share buffer between CH1 and CH2
-        MSO Logic Analyzer more SPS, with DMA
         Force trigger, Trigger timeout in menu
-		USB Frame counter
-        Disable gain on CH1 if Gain=1, to allow simultaneous sampling
-        Channel math in meter mode
-		USE NVM functions from BOOT */
-// TODO When 64k parts come out:
-/*      Vertical zoom
-        Filter mode (Audio in -> Filter -> Audio Out)
-        Pulse width and Period vmeasurements
-        Add CRC to serial communication
-        UART Auto baud rate
-        Programmer mode
-		PC control digital lines -> bus driver! SPI / I2C / UART ...
-        Logic Port Invert: Select individual channels
-        Sniffer IRDA, 1 Wire, MIDI
-        Protocol trigger
-        Use as a programmer
-        Terminal mode
-        FFT waterfall
-        Setting profiles
-        Continuous data to USB from ADC
-        Independent CH1 and CH2 Frequency measurements, up to 1Mhz
-        1v/octave (CV/Gate) AWG control
-        RMS
-        Arbitrary math expression on AWG
-        DAC Calibration
-	    Use DMA for USART PC transfers
-        Dedicated Bode plots - Goertzel algorithm?
-        Dedicated VI Curve
-	    12bit with slow sampling
-        Horizontal cursor on FFT
-        16MSPS for logic data, 1/sinc(x) for analog
-	    Show menu title */
+        USE NVM functions from BOOT */
+
 // TODO Expansion boards: SD, Keyboard, Display, RS232, MIDI, Video, RAM
 
 /* Hardware resources:
@@ -168,11 +132,11 @@ int main(void) {
     OSC.PLLCTRL = 0xC2;     // XOSC is PLL Source - 2x Factor (32MHz)
     OSC.CTRL = OSC_RC2MEN_bm | OSC_RC32MEN_bm | OSC_XOSCEN_bm;
     delay_ms(2);
-/*    // Switch to internal 2MHz if crystal fails
+    // Switch to internal 2MHz if crystal fails
     if(!testbit(OSC.STATUS,OSC_XOSCRDY_bp)) {   // XT ready flag not set?
         OSC.XOSCCTRL = 0x00;    // Disable external oscillators
         OSC.PLLCTRL = 0x10;     // 2MHz is PLL Source - 16x Factor (32MHz)
-    }*/
+    }
     OSC.CTRL = OSC_RC2MEN_bm | OSC_RC32MEN_bm | OSC_PLLEN_bm | OSC_XOSCEN_bm;
 
     // Watchdog timer on
@@ -263,10 +227,7 @@ int main(void) {
     // Initialize LCD
     GLCD_LcdInit();
     GLCD_setting();
-/*
-    if(CLK.CTRL & CLK_SCLKSEL_RC32M_gc) {   // Clock error?
-        tiny_printp(0,7,PSTR("NO XT"));
-    }*/
+
     // RTC Clock Settings
     /* Set 1.024kHz from internal 32.768kHz RC oscillator */
     uint8_t i;
@@ -297,7 +258,9 @@ int main(void) {
 //        send(VPORT2.IN);            // Send logic port data to serial port
         memcpy_P(Disp_send.display_data+30,  &Logo, 69);   // Print Gabotronics, top center
         tiny_printp(50,1,VERSION);
-//        tiny_printp(0,3,PSTR("XMEGA rev")); GLCD_Putchar('A'+MCU.REVID);
+        if(CLK.CTRL & CLK_SCLKSEL_RC32M_gc) {   // Clock error?
+            tiny_printp(0,7,PSTR("NO XT"));
+        }
         tiny_printp(0,6,PSTR("OFFSET       SLEEP:      RESTORE"));
         u8CursorX=58;   // Already have a new line from previous print
         if(i) printN3x6(i);    // Sleep timeout

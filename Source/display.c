@@ -5,6 +5,7 @@
 #include "mygccdef.h"
 #include "main.h"
 #include "mso.h"
+#include "utils.h"
 
 Disp_data Disp_send;
 uint8_t   u8CursorX, u8CursorY;
@@ -38,14 +39,15 @@ void GLCD_setting(void) {
 
 // Sprites, each byte pair represents next pixel relative position
 void sprite(uint8_t x, uint8_t y, const int8_t *ptr) {
+    int8_t a=0;
+    int8_t b=0;
     do {
-        int8_t a=pgm_read_byte(ptr++);  // Get next x
-        int8_t b=pgm_read_byte(ptr++);  // Get next y
-        if((uint8_t)a==255) return;     // 255 marks the end of the sprite
         set_pixel(x+a,y+b);
+        a=pgm_read_byte(ptr++);  // Get next x
+        b=pgm_read_byte(ptr++);  // Get next y
+        if((uint8_t)a==255) return;     // 255 marks the end of the sprite
     } while(1);
 }
-
 
 // Print a char on the display using the 3x6 font
 void putchar3x6(char u8Char) {

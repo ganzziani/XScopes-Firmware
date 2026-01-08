@@ -4,6 +4,7 @@
 #include "main.h"
 #include "mso.h"
 #include "USB\usb_xmega.h"
+#include "utils.h"
 
 void LogicDMA(void);
 void DisplayData(uint8_t side, uint8_t page);

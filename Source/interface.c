@@ -274,7 +274,9 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
         case 'C': SendBMP(); break; // Send BMP
 		case 0xBB: // disconnect from USB, jump to bootloader
 			USB_ep0_in_start(0);
-			USB_ep0_wait_for_complete();
+            // USB_ep0_wait_for_complete
+            endpoints[0].out.STATUS &= ~(USB_EP_SETUP_bm | USB_EP_TRNCOMPL0_bm | USB_EP_BUSNACK0_bm);
+            while (!(endpoints[0].out.STATUS & USB_EP_TRNCOMPL0_bm) && !(endpoints[0].in.STATUS & USB_EP_TRNCOMPL0_bm)){};
 			cli();
 			delay_ms(10);
 			USB.CTRLB &= ~USB_ATTACH_bm;    // disconnects the device from the USB lines

@@ -911,7 +911,7 @@ windowCH2:
 .section .bss
 .global endpoints   // Endpoints configuration tables
 .align 2            // Align to word
-endpoints:  .dc.b 1,2,3,4,5,6,7,8    ; ep0 out
-            .dc.b 1,2,3,4,5,6,7,8    ; ep0 in
-            .dc.b 1,2,3,4,5,6,7,8    ; ep1 out
-            .dc.b 1,2,3,4,5,6,7,8    ; ep1 in
+endpoints:  .dc.b 0,0,0,0,0,0,0,0    ; ep0 out
+            .dc.b 0,0,0,0,0,0,0,0    ; ep0 in
+            .dc.b 0,0,0,0,0,0,0,0    ; ep1 out
+            .dc.b 0,0,0,0,0,0,0,0    ; ep1 in

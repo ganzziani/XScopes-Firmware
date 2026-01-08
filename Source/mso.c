@@ -620,7 +620,13 @@ void MSO(void) {
             if(testbit(Sweep,SweepF)) {
                 uint32_t freqv;
                 freqv = pgm_read_dword_near(freqval+Srate)/4096;    // Sweep will have 256 * 16 steps
-                if(Srate<=6) M.AWGdesiredF = (uint32_t)(AWGsweepi)*(freqv) / 2; // AWGSweepi max is 4095
+                if(Srate<=6) {
+                    M.AWGdesiredF = (uint32_t)(AWGsweepi)*(freqv) / 2; // AWGSweepi max is 4095
+                    uint8_t Fcomp8 = M.AWGdesiredF >> 16;   // Use only 8bits for comparison
+                    if(Fcomp8>0xBE) {               //  AWGdesiredF > 12517375 ?
+                        M.AWGdesiredF=0x00BEFFFF;   //  AWGdesiredF = 12517375
+                    }
+                }
                 else M.AWGdesiredF = (uint32_t)(AWGsweepi)*(freqv) / 2000;
             }
             if(testbit(Sweep,SweepA)) M.AWGamp    = -(uint8_t)(AWGsweepi>>5);
@@ -1013,7 +1019,7 @@ void MSO(void) {
                             M.Tlevel = center2;
                             if(testbit(CH2ctrl,chinvert)) M.Tlevel=255-M.Tlevel;
                         }
-                        if(testbit(MFFT, scopemode)) {
+                        if(testbit(MFFT, scopemode)) {  // FFT Mode
                             // If both channels, reduce gain and adjust positions
                             M.CH1pos = -center1/2;
                             M.CH2pos = -center2/2;
@@ -1479,15 +1485,12 @@ void MSO(void) {
                         togglebit(Mcursors, reference);
                         if(testbit(Mcursors, reference)) {
                             // Save waveform to EEPROM
-                            tiny_printp(50,4,PSTR("SAVING...")); dma_display();
-                            eeprom_write_byte(&EECH1Pos, M.CH1pos);
-                            eeprom_write_byte(&EECH2Pos, M.CH2pos);
-                            eeprom_write_byte(&EEHPos, M.HPos);
-                            uint8_t i=0;
-                            do {     // Apply position
-                                eeprom_write_byte(&EECHREF1[i], DC.CH1data[i]);
-                                eeprom_write_byte(&EECHREF2[i], DC.CH2data[i]);
-                            } while(++i);
+                            eeprom_write_byte(&EECH1Pos, M.CH1pos);     // Save CH1 position
+                            eeprom_write_byte(&EECH2Pos, M.CH2pos);     // Save CH2 position
+                            eeprom_write_byte(&EEHPos, M.HPos);         // Save Horizontal position
+                            eeprom_busy_wait();
+                            eeprom_write_block(DC.CH1data, EECHREF1, 256);
+                            eeprom_write_block(DC.CH2data, EECHREF2, 256);
                         }
                     }
                 break;

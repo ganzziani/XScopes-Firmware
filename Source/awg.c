@@ -33,7 +33,7 @@ void moveF(void) {
 void BuildWave(void) {
     if(M.AWGamp>0)      M.AWGamp=0;         // AWGAmp must be negative
     if(M.AWGduty==0)    M.AWGduty=1;        // Zero is invalid
-    uint8_t *pf = &M.AWGdesiredF;           // Get address of M.AWGdesiredF
+    uint8_t *pf = (uint8_t *)&M.AWGdesiredF;           // Get address of M.AWGdesiredF
     if(M.AWGdesiredF==0)  *pf = 1;          // Minimum Freq= 0.01Hz (only need to access lower byte of M.AWGdesiredF)
     // Maximum Frequency check done at CheckMax function
     
