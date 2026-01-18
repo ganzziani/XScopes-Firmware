@@ -16,9 +16,9 @@ const unsigned char Logo[] PROGMEM = {
 };
 
 // Sprites, each byte pair represents next pixel relative position
-const int8_t TrigDown[] PROGMEM = { 0,2,  1,0, 1,1,  1,2,  1,3,  2,2, 255  }; // Falling trigger
-const int8_t TrigUp[]   PROGMEM = { 0,-2, 1,0, 1,-1, 1,-2, 1,-3, 2,-2, 255 }; // Rising trigger
-const int8_t TrigDual[] PROGMEM = { 0,-2, 1,0, 1,-1, 1,-2, 1,-3, 2,-2, 0,2,  1,0, 1,1,  1,2,  1,3,  2,2, 255 }; // Dual edge
+const int8_t TrigDown[] PROGMEM = { 0,0, 0,2,  1,0, 1,1,  1,2,  1,3,  2,2, 255  }; // Falling trigger
+const int8_t TrigUp[]   PROGMEM = { 0,0, 0,-2, 1,0, 1,-1, 1,-2, 1,-3, 2,-2, 255 }; // Rising trigger
+const int8_t TrigDual[] PROGMEM = { 0,0, 0,-2, 1,0, 1,-1, 1,-2, 1,-3, 2,-2, 0,2,  1,0, 1,1,  1,2,  1,3,  2,2, 255 }; // Dual edge
 
 const unsigned char BattIcon[] PROGMEM = {
     0x7E,0x42,0x42,0x42,0x42,0x42,0x7E,0x18,

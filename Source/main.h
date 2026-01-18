@@ -34,7 +34,7 @@
 // CH1ctrl bits    (GPIO1)
 // CH2ctrl bits    (GPIO2)
 #define chon        0       // Channel on
-#define x10         1       // x10 probe
+#define chx10       1       // x10 probe
 #define bwlimit     2       // Bandwidth Limit
 #define acdc        3       // AC/DC Select
 #define chinvert    4       // Invert channel

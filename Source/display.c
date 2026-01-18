@@ -39,13 +39,11 @@ void GLCD_setting(void) {
 
 // Sprites, each byte pair represents next pixel relative position
 void sprite(uint8_t x, uint8_t y, const int8_t *ptr) {
-    int8_t a=0;
-    int8_t b=0;
     do {
-        set_pixel(x+a,y+b);
-        a=pgm_read_byte(ptr++);  // Get next x
-        b=pgm_read_byte(ptr++);  // Get next y
+        int8_t a=pgm_read_byte(ptr++);  // Get next x
+        int8_t b=pgm_read_byte(ptr++);  // Get next y
         if((uint8_t)a==255) return;     // 255 marks the end of the sprite
+        set_pixel(x+a,y+b);
     } while(1);
 }
 
@@ -114,7 +112,7 @@ extern const uint16_t milivolts[];
 // Print Voltage, multiply by 10 if using the x10 probe
 void printV(int16_t Data, uint8_t gain, uint8_t CHCtrl) {
     int32_t Data32 = (int32_t)Data*milivolts[gain];
-    if(testbit(CHCtrl,x10)) Data32*=10;
+    if(testbit(CHCtrl,chx10)) Data32*=10;
     printF(u8CursorX,u8CursorY,Data32/8);
 }    
 
@@ -122,7 +120,7 @@ void printV(int16_t Data, uint8_t gain, uint8_t CHCtrl) {
 // or Print Long integer with 7 digits
 void printF(uint8_t x, uint8_t y, int32_t Data) {
 	uint8_t D[8]={0,0,0,0,0,0,0,0},point=0;
-    uint8_t *DisplayPointer = &Disp_send.display_data[((uint16_t)(u8CursorY<<7)) + (u8CursorX)];
+    uint8_t *DisplayPointer = &Disp_send.display_data[((uint16_t)(y<<7)) + (x)];
     lcd_goto(x,y);
     if(Data<0) {    // Negative number: Print minus
         Data=-Data;
