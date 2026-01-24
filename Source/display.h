@@ -18,13 +18,13 @@ extern uint8_t u8CursorX, u8CursorY;
 void print3x6(const char *);
 void putchar3x6 (char);
 void printN3x6(uint8_t Data);
+void printhex3x6(uint8_t n);           // Prints a HEX number
 void clr_display(void);
 void sprite(uint8_t x, uint8_t y, const int8_t *ptr);
 void printV(int16_t Data, uint8_t gain, uint8_t CHCtrl);
 void printF(uint8_t x, uint8_t y, int32_t Data);
 void tiny_printp(uint8_t x, uint8_t y, const char *ptr);
 void LcdInstructionWrite (unsigned char);
-void printhex3x6(uint8_t n);           // Prints a HEX number
 
 void GLCD_LcdInit(void);
 void GLCD_setting(void);

@@ -3,7 +3,7 @@
 
 //#define SPANISH
 
-const char VERSION[]    PROGMEM = "FW 2.78";
+const char VERSION[]    PROGMEM = "FW 2.80";
 
 // Strings with special characters:
 // 0x1F = delta

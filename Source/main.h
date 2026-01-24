@@ -39,7 +39,7 @@
 #define acdc        3       // AC/DC Select
 #define chinvert    4       // Invert channel
 #define chaverage   5       // Average samples
-#define chmath      6       // math (Subtract or Multiply active)
+#define chmath      6       // Math (Subtract or Multiply active)
 #define submult     7       // Subtract or Multiply
 
 // CHDctrl bits    (GPIO3)
@@ -176,8 +176,8 @@ typedef union {
         } METER;
     } IN;
     struct {
-        uint8_t AWGTemp1[BUFFER_AWG];
-        uint8_t AWGTemp2[BUFFER_AWG];
+        int8_t AWGTemp1[BUFFER_AWG];
+        int8_t AWGTemp2[BUFFER_AWG];
     } DATA;
     struct {
         union {

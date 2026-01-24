@@ -22,7 +22,7 @@
             TCD0L 40.96mS period - 24.4140625 Hz - Source for Event CH7
 	        TCD0H Controls LCD refresh rate
 	    TCD1  Overflow used for AWG
-        TCE0  Controls Interrupt ADC (srate >= 11), srate: 6, 7, 8, 9, 10
+        TCE0  Controls Interrupt ADC (Srate >= 11), Srate: 6, 7, 8, 9, 10
               Fixed value for slow sampling
               Frequency counter high 16bits
     Events:
@@ -372,7 +372,6 @@ uint8_t ReadCalibrationByte(uint8_t location) {
 
 // Calibrate offset, inputs must be connected to ground
 void CalibrateOffset(void) {
-    uint8_t i;
     #ifndef NODISPLAY
         Buttons=0;
         clr_display();
@@ -384,10 +383,10 @@ void CalibrateOffset(void) {
         setbit(Buttons,K3);
     #endif
     if(testbit(Buttons,K3)) {
-        uint8_t s=0;
+        uint8_t i,s=0;
         int16_t avrg1, avrg2;
         clr_display();
-	    for(Srate=0; Srate<8; Srate++) {	// Cycle thru first 8 srates
+	    for(Srate=0; Srate<8; Srate++) {	// Cycle thru first 8 SamplingRates
             i=6; do {                       // Cycle thru all the gains
                 int8_t  *q1, *q2;  // temp pointers to signed 8 bits
                 s++;
@@ -440,50 +439,6 @@ void CalibrateOffset(void) {
     eeprom_write_byte(&EECalibrated, 1);    // Calibration complete!
 }
 
-// Calibrate gain, inputs must be connected to 4.000V
-void CalibrateGain(void) {
-    #ifndef NODISPLAY
-        Buttons=0;
-        clr_display();
-        print3x6(PSTR("NOW CONNECT 4.000V"));
-        tiny_printp(116,7,PSTR("GO"));
-        dma_display();
-        while(!Buttons);
-    #else
-        setbit(Buttons,K3);
-    #endif
-    if(testbit(Buttons,K3)) {
-        int16_t offset;
-        int32_t avrg1=0, avrg2=0;
-        clr_display();
-        // Calculate offset for Meter in VDC
-        ADCA.CTRLB = 0x90;          // signed mode, no free run, 12 bit right adjusted
-        ADCA.PRESCALER = 0x07;      // Prescaler 512 (500kHZ ADC clock)
-        uint8_t i=0;
-        do {
-            ADCA.CH0.CTRL     = 0x83;   // Start conversion, Differential input with gain
-            ADCA.CH1.CTRL     = 0x83;   // Start conversion, Differential input with gain
-            delay_ms(1);
-            avrg1-= (int16_t)ADCA.CH0.RES;
-            avrg2-= (int16_t)ADCA.CH1.RES;
-        } while(++i);
-        // Vcal = 4V
-        // Amp gain = 0.18
-        // ADC Reference = 1V
-        // 12 bit signed ADC -> Max = 2047
-        // ADC cal = 4*.18*2047*256 = 377303
-        // ADCcal = ADCmeas * (2048+cal)/2048
-		offset=(int16_t)eeprom_read_word((uint16_t *)&offset16CH1);      // CH1 Offset Calibration
-		avrg1+=offset;
-        avrg1 = (377303*2048l-avrg1*2048)/avrg1;
-        eeprom_write_byte((uint8_t *)&gain8CH1, avrg1);
-		offset=(int16_t)eeprom_read_word((uint16_t *)&offset16CH2);      // CH2 Offset Calibration
-		avrg2+=offset;
-        eeprom_write_byte((uint8_t *)&gain8CH2, avrg2);
-    }
-    Buttons=0;
-}
-
 // Fill up channel data buffers
 void SimpleADC(void) {
 	Apply();
@@ -497,123 +452,10 @@ void SimpleADC(void) {
     clrbit(DMA.CH1.CTRLA, 7);
 }
 
-/*
-// Calibrate DAC gain and offset, connect AWG to CH1
-// Adjust with rotary encoders
-static void CalibrateDAC(void) {
-    uint8_t i, step=0, data, average;
-    uint8_t test, bestoffset, bestgain, bestmeasure1;
-    uint16_t sum, bestmeasure2;
-    clr_display();
-
-    ADCA.CH0.CTRL = 0x03 | (6<<2);       // Set gain 6
-    CH1.offset=(signed char)eeprom_read_byte(&offsetsCH1[6]);
-
-    AWGAmp=127;         // Amplitude range: [0,127]
-    AWGtype=1;          // Waveform type
-    AWGduty=256;        // Duty cycle range: [0,512]
-    AWGOffset=0;        // 0V offset
-    desiredF = 100000;  // 1kHz
-    BuildWave();
-    while(step<7) {
-        while(!testbit(TCD0.INTFLAGS, TC1_OVFIF_bp));   // wait for refresh timeout
-        setbit(TCD0.INTFLAGS, TC1_OVFIF_bp);
-        // Acquire data
-
-        // Display waveform
-        i=0; sum=0;
-        do {
-            data=addwsat(CH1.data[i],CH1.offset);
-            sum+=data;
-            set_pixel(i>>1, data>>2);    // CH1
-        } while(++i);
-        average=(uint8_t)(sum>>8);
-
-        switch(step) {
-            case 0: // Connect AWG to CH1
-                tiny_printp(0,0,PSTR("AWG Calibration Connect AWG CH1 Press 5 to start"));
-                step++;
-            break;
-            case 1:
-                if(key) {
-                    if(key==KC) step++;
-                    else step=7;         // Did not press 5 -> exit
-                }
-            break;
-            case 2: // Output 0V from AWG
-                AWGAmp=1;         // Amplitude range: [0,127]
-                AWGtype=1;        // Waveform type
-                BuildWave();
-                tiny_printp(0,3,PSTR("Adjusting offset"));
-                // ADS931 power, output enable, CH gains
-//                PORTE.OUT = 0;
-                CH1.offset=(signed char)eeprom_read_byte(&offsetsCH1[0]);
-                step++;
-                bestoffset = 0;
-                test = 0;
-                bestmeasure1=0;
-                DACB.OFFSETCAL = 0;
-            break;
-            case 3: // Adjust Offset
-                if(abs((int16_t)average-128)<abs((int16_t)bestmeasure1-128)) {    // Current value is better
-                    bestoffset = test;
-                    bestmeasure1=average;
-                    lcd_goto(0,4);
-                    if(bestoffset>=0x40) printN(0x40-bestoffset);
-                    else printN(bestoffset);
-                }
-                lcd_line(0,bestmeasure1>>1,127,bestmeasure1>>1);
-                test++;
-                DACB.OFFSETCAL = test;
-                if(test>=128) {
-                    step++;
-                    DACB.OFFSETCAL = bestoffset;   // Load DACA offset calibration
-                }
-            break;
-            case 4: // Output -1.75V from AWG
-                AWGAmp=0;           // Full Amplitude
-                AWGtype=1;          // Waveform type
-                AWGOffset=112;      // Offset = -1.75
-                BuildWave();
-                tiny_printp(0,5,PSTR("Adjusting gain"));
-//                PORTE.OUT = 4;  // 0.5V / div
-                CH1.offset=(signed char)eeprom_read_byte(&offsetsCH1[4]);
-                step++;
-                bestgain = 0;
-                test=0;
-                bestmeasure2=0;
-                DACB.GAINCAL = 0;
-            break;
-            case 5: // Adjust gain
-                // (1.75/0.5)*32+128)*256 = 61440
-                if(abs((int32_t)sum-61696)<abs((int32_t)bestmeasure2-61696)) {    // Current value is better
-                    bestgain = test;
-                    bestmeasure2=sum;
-                    lcd_goto(0,6);
-                    if(bestgain>=0x40) printN(0x40-bestgain);
-                    else printN(bestgain);
-                }
-                test++;
-                DACB.GAINCAL = test;
-                if(test>=128) {
-                    step++;
-                    DACB.GAINCAL = bestgain;
-                }
-            break;
-            case 6: // Calibration complete
-                // Save calibration results
-                AWGAmp=0;
-                eeprom_write_byte(&EEDACoffset, bestoffset);    // Save offset calibration
-                eeprom_write_byte(&EEDACgain, bestgain);        // Save gain calibration
-                tiny_printp(0,15,PSTR("Cal complete"));
-                step++;
-            break;
-        }
-    }
-    // Restore Waveform
-    LoadAWGvars();              // Load AWG settings
-    BuildWave();                // Construct AWG waveform
-}*/
+void delay_ms(uint8_t n) {
+    WDR();  // Clear watchdog
+    for(;n;n--) _delay_ms(1);
+}
 
 extern const NVMVAR FLM;
 
@@ -670,9 +512,4 @@ void PowerDown(void) {
 // Wake up from sleep
 ISR(TCD2_HUNF_vect) {
     SLEEP.CTRL = 0x00;
-}
-
-void delay_ms(uint8_t n) {
-    WDR();  // Clear watchdog
-    for(;n;n--) _delay_ms(1);
 }

@@ -12,7 +12,7 @@ int16_t EEMEM offset16CH2    = 0;
 int8_t  EEMEM gain8CH1       = 0;     // 1
 int8_t  EEMEM gain8CH2       = 0;     // 1
 int8_t  EEMEM offset8CH1[8][7] = { { 0 } };
-int8_t  EEMEM offset8CH2[7][7] = { { 0 } };
+int8_t  EEMEM offset8CH2[8][7] = { { 0 } };
 
 // Default settings stored in flash
 const uint8_t FLGPIO[12] PROGMEM = {
@@ -111,7 +111,7 @@ NVMVAR EEMEM EEM = {                    // EEMEM Copy
 };
 
 // Maximum values
-const NVMVAR MAXM PROGMEM = {            // Flash Copy
+const NVMVAR MAXM PROGMEM = {   // Flash Copy
     6,      //  CH1gain;        // Max Gain is 6
     6,      //  CH2gain;        // Max Gain is 6
     127,    //  HPos            // Max Horizontal Position
@@ -139,7 +139,7 @@ const NVMVAR MAXM PROGMEM = {            // Flash Copy
     5,      //  AWGtype;        // 5 waveform type
     255,    //  AWGduty;        //
     255,    //  AWGoffset;      //
-    0x00BEFFFF,  //  AWGdesiredF;    // 12517375
+    0x00BEFFFF,  //  AWGdesiredF;    // Max set to 125.17375kHz
 };
 
 // Hamming window = 0.53836-0.46164*COS(2*PI*n/(FFT_N-1))

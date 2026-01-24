@@ -14,7 +14,7 @@
 void Reduce(void);
 void RestorefromMeter(void);		        // Restores srate and gains
 void GoingtoMeter(void);			        // Saves srate and gains
-uint8_t fft_stuff(uint8_t *p1);
+uint8_t fft_stuff(uint8_t *p);
 void AutoCursorV(void);                     // Automatically set vertical the cursors
 static inline void Measurements(void);      // Measurements for Meter Mode
 static inline void ShowCursorV(void);       // Display Vertical Cursor
@@ -38,7 +38,7 @@ uint8_t EEMEM EEHPos = 0;           // Position for EE in XY mode
 
 // ADC system clock timers
 
-// TCE0 controls Interrupt ADC, srate: 6    7    8    9    10
+// TCE0 controls Interrupt ADC, Srate: 6    7    8    9    10
 const uint16_t TCE0val[5] PROGMEM = { 249, 499, 999, 2499, 4999 };
 
 // TCE0 timer is fixed for slow sampling rates (20mS/div and under)
@@ -84,7 +84,8 @@ const uint32_t freqval[22] PROGMEM = {
     1600000000,800000000,320000000,160000000,
     // Slow sampling
     160000000,64000000,32000000,16000000,6400000,3200000,
-    1600000,  640000,  320000,  160000,  64000 };
+    1600000,  640000,  320000,  160000,  64000
+};
 
 const uint16_t timeval[22] PROGMEM = {   // = Time division * 10000 / (16*250)
     /* micro Seconds */
@@ -92,7 +93,8 @@ const uint16_t timeval[22] PROGMEM = {   // = Time division * 10000 / (16*250)
     /* mili Seconds */
     25,50,125,250,500,1250,2500,5000,12500,
     /* Seconds */
-    25,50,125,250,500,1250 };
+    25,50,125,250,500,1250
+};
 
 const char menustxt[][35] PROGMEM = {           // Menus:
     " CH ON   \0      GAIN-    \0   GAIN+",     // 0  Channel
@@ -366,14 +368,15 @@ void MSO(void) {
 // Wait for trigger, start acquisition
         if(!testbit(MStatus, stop) &&       // MSO not stopped and
            !testbit(MStatus, triggered)) {  // Trigger not set already
-			uint8_t i=M.Thold;	// Trigger hold
-            while(i!=0) {
+            uint8_t SR = Srate;
+			uint8_t hold=M.Thold;           // Trigger hold
+            while(hold!=0) {
                 if(testbit(MStatus,update)) break;
-                delay_ms(1); i--;
+                delay_ms(1); hold--;
             }
-            if(Srate<11) StartDMAs();       // Start capturing samples
+            if(SR<11) StartDMAs();       // Start capturing samples
             if(!(testbit(Trigger, normal) || testbit(Trigger, autotrg)) ||      // free trigger
-            (testbit(Mcursors,roll) && Srate>=11)                               // roll mode in slow sampling
+            (testbit(Mcursors,roll) && SR>=11)                               // roll mode in slow sampling
             || MFFT<0x20) {                                                     // or meter mode
                 if(!testbit(MStatus, update)) setbit(MStatus, triggered);       // Set trigger
             }
@@ -381,12 +384,12 @@ void MSO(void) {
                 TCC1.CNT = 0;                   // TCC1 will count the post trigger samples
                 TCC1.INTFLAGS = 0x01;           // Clear overflow flag
                 Tpost = M.Tpost;                // Load number of samples to acquire after trigger
-                if(Srate>1) Tpost=Tpost<<1;     // Oversample is x2 at Srate 2 and above
+                if(SR>1) Tpost=Tpost<<1;     // Oversample is x2 at Srate 2 and above
                 // Can't stop the ADC fast enough, so compensate
-                if(Srate==0) Tpost-=8;
-                else if(Srate==1) Tpost-=5;
-                else if(Srate==2) Tpost-=5;
-                else if(Srate<=5) Tpost-=4;
+                if(SR==0) Tpost-=8;
+                else if(SR==1) Tpost-=5;
+                else if(SR==2) Tpost-=5;
+                else if(SR<=5) Tpost-=4;
                 else if(Tpost) Tpost--;
                 TCC1.PERL = lobyte(Tpost);
                 TCC1.PERH = hibyte(Tpost);
@@ -471,7 +474,7 @@ void MSO(void) {
                 circular=512-DMA.CH0.TRFCNT;   // get index
 ///////////////////////////////////////////////////////////////////////////////
 // Invert and adjust offset, apply channel math, loop thru circular buffer
-                if(Srate<=1) {  // srate 0 and 1 only use the top half of the buffer
+                if(Srate<=1) {  // Srate 0 and 1 only use the top half of the buffer
                     circular+=256;
                     if(circular>=512) circular=circular-512;
                 }
@@ -492,7 +495,7 @@ void MSO(void) {
                         q2=(int8_t *)T.IN.CH2;
                         q3=(int8_t *)T.IN.CHD;
                     }
-                    if(Srate>1) {   // Srate 0 and 1 only have 256 data points
+                    if(Srate>1) {   // Srate 0 and 1 only have 256 data points, all others have 512
                         if(testbit(CH1ctrl,chaverage)) {
                             ch1raw=((int8_t)(ch1raw)>>1)+((int8_t)(*q1)>>1);
                         }
@@ -855,9 +858,10 @@ void MSO(void) {
                 }
                 if(testbit(MFFT,iqfft)) {   // Display new FFT data
                     if(Display&0x03) {              // Grid
-            			set_pixel(M.HPos,16);       // Vertical dot
-    	        		set_pixel(M.HPos,32);       // Vertical dot
-    			        set_pixel(M.HPos,48);       // Vertical dot
+                        uint8_t pos= M.HPos;
+            			set_pixel(pos,16);       // Vertical dot
+    	        		set_pixel(pos,32);       // Vertical dot
+    			        set_pixel(pos,48);       // Vertical dot
 			        }
                     fft_stuff(NULL);
                     for(uint8_t i=0; i<FFT_N/2; i++) {
@@ -1103,24 +1107,17 @@ checknext:
                     }
                     if(testbit(Buttons,K2) && testbit(Buttons,K3)) M.HPos = 64;
                     else {
-                        if(testbit(Buttons,K2)) {    // Sampling rate
-                            if(!testbit(MStatus,stop)) {
-                                if(Srate<21) Srate++;
-                                else Srate=21;
-                                uint8_t i=0; do {
-                                    DC.CH1data[i]=128;
-                                    DC.CH2data[i]=128;
-                                    DC.CHDdata[i]=0;
-                                } while (++i);
-                                setbit(Misc, redraw);
-                                Index=0;
-                                TCE0.INTCTRLA = 0;
-                                clrbit(MStatus,triggered);
+                        if(!testbit(MStatus,stop)) {
+                            uint8_t SR = Srate;
+                            if(testbit(Buttons,K2)) {    // Sampling rate
+                                if(SR<21) SR++;
+                                else SR=21;
                             }
-                        }
-                        if(testbit(Buttons,K3)) {    // Sampling rate
-                            if(!testbit(MStatus,stop)) {
-                                if(Srate) Srate--;
+                            if(testbit(Buttons,K3)) {    // Sampling rate
+                                if(SR) SR--;
+                            }
+                            if(SR!=Srate) {
+                                Srate = SR;
                                 uint8_t i=0; do {
                                     DC.CH1data[i]=128;
                                     DC.CH2data[i]=128;
@@ -1312,23 +1309,23 @@ checknext:
                     setbit(MStatus, updateawg);
                 break;
                 case MCH1OPT:    // CH1 Menu 2
-                    if(testbit(Buttons,K1)) Menu = MCH1POS;  // CH1 Position
-                    if(testbit(Buttons,K2)) {   // Invert Channel
+                    if(testbit(Buttons,K1)) Menu = MCH1POS;             // CH1 Position
+                    if(testbit(Buttons,K2)) {                           // Invert Channel
                         togglebit(CH1ctrl,chinvert);
                         setbit(Misc, redraw);
                     }
-                    if(testbit(Buttons,K3)) Menu = MCH1MATH;    // Math
+                    if(testbit(Buttons,K3)) Menu = MCH1MATH;            // CH1 Math
                 break;
                 case MCH2OPT:    // CH2 Menu 2
-                    if(testbit(Buttons,K1)) Menu=MCH2POS;   // CH2 Position
-                    if(testbit(Buttons,K2)) {   // Invert Channel
+                    if(testbit(Buttons,K1)) Menu=MCH2POS;               // CH2 Position
+                    if(testbit(Buttons,K2)) {                           // Invert Channel
                         togglebit(CH2ctrl,chinvert);
                         setbit(Misc, redraw);
                     }
-                    if(testbit(Buttons,K3)) Menu=MCH2MATH;  // Math
+                    if(testbit(Buttons,K3)) Menu = MCH2MATH;            // CH2 Math
                 break;
                 case MCHDOPT1:    // Logic Analyzer Options
-                    if(testbit(Buttons,K1)) M.CHDpos+=8;              // Logic Position
+                    if(testbit(Buttons,K1)) M.CHDpos+=8;                    // Logic Position
                     if(testbit(Buttons,K2)) togglebit(CHDctrl,chinvert);    // Invert Channel
                     if(testbit(Buttons,K3)) togglebit(CHDctrl,low);         // Thick line when logic '0'
                 break;
@@ -1573,7 +1570,7 @@ checknext:
                 case MSPI:    // SPI Menu
                     if(testbit(Buttons,K1)) togglebit(Sniffer,CPOL);        // Toggle CPOL
                     if(testbit(Buttons,K2)) togglebit(Sniffer,CPHA);        // Toggle CPHA
-                    if(testbit(Buttons,K3)) togglebit(Sniffer,SSINV);        // Toggle CPHA
+                    if(testbit(Buttons,K3)) togglebit(Sniffer,SSINV);       // Toggle CPHA
                 break;
                 case MCH1MATH:    // Channel 1 Math
                     if(testbit(Buttons,K1)) {   // Subtract
@@ -2178,13 +2175,9 @@ checknext:
                 }
                 switch(Display&0x03) {
                     case 1: // Vertical dots
-                        {   // Set dots at: (64,16), (64,32), (64,48)
-                            uint8_t *p = &Disp_send.display_data[((uint16_t)(1<<7)) + 64]; // Locate pointer at (64,16)
-                            for(uint8_t i=3; i; i--) {
-                                *p|=0x80;   // OR one pixel
-                                p+=256;       // Move 2 bars below
-                            }
-                        }
+                        set_pixel(64,16);
+                        set_pixel(64,32);
+                        set_pixel(64,48);
                     case 2:
                         for(uint8_t i=16; i<=112; i+=16) {
                             if(testbit(CH1ctrl,chon)) set_pixel(i,ch1gnd);          // CH1 ground
@@ -2363,7 +2356,7 @@ checknext:
 ///////////////////////////////////////////////////////////////////////////////
 // Limit LCD refresh rate
         if(MFFT>=0x20 || (adjusting==0)) { // Not meter mode, Auto setup has not yet locked on settings
-            if(!testbit(TCD0.INTFLAGS, TC2_HUNFIF_bp)) {            //  If not overflowed, go to idle mode
+            if(!testbit(TCD0.INTFLAGS, TC2_HUNFIF_bp)) {            // If not overflowed, go to idle mode
                 TCD0.INTCTRLA = TC2_HUNFINTLVL_LO_gc;               // Enable interrupt to wakeup
                 SLEEP.CTRL = SLEEP_SMODE_IDLE_gc | SLEEP_SEN_bm;    //
                 asm("sleep");
@@ -2418,25 +2411,24 @@ void GoingtoMeter(void) {
     adjusting=7;            // First adjusting step
 }
 
-uint8_t fft_stuff(uint8_t *p1) {
-    uint8_t f,w;
-	const int8_t *p3;		// Pointer to window function
-    if(testbit(MFFT, hamming)) p3=Hamming;          // Apply Hamming window
-    else if(testbit(MFFT, hann)) p3=Hann;           // Apply Hann window
-    else if(testbit(MFFT, blackman)) p3=Blackman;   // Apply Blackman window
+uint8_t fft_stuff(uint8_t *p) {
+	const int8_t *windowp;                              // Pointer to window table
+    if(testbit(MFFT, hamming)) windowp=Hamming;         // Apply Hamming window
+    else if(testbit(MFFT, hann)) windowp=Hann;          // Apply Hann window
+    else if(testbit(MFFT, blackman)) windowp=Blackman;  // Apply Blackman window
 	else setbit(Misc, bigfont);		// Temporally use this bit for "no window"
 	if(testbit(MFFT,iqfft)) {
-        const uint8_t *p2;		// Pointer to channel data
-    	p1=DC.CH1data; p2=DC.CH2data;
+        const uint8_t *p1 = DC.CH1data;             // Pointer to ch1 data
+        const uint8_t *p2 = DC.CH2data;		        // Pointer to ch2 data
         uint8_t i=0;
         do {
             uint8_t ch1,ch2;
-		    w=pgm_read_byte_near(p3);           // Get window data
-		    if(testbit(Misc,bigfont)) w=127;    // No window
-		    if(i<127) p3++;                     // Window symmetry
-		    if(i>127) p3--;                     // (only stored half of window)
-            ch1=(int8_t)((*p1++)-128);          // Convert to signed char
-            ch2=(int8_t)((*p2++)-128);          // Convert to signed char
+		    uint8_t w=pgm_read_byte_near(windowp);  // Get window data
+		    if(testbit(Misc,bigfont)) w=127;        // No window
+		    if(i<127) windowp++;                    // Window symmetry
+		    if(i>127) windowp--;                    // (only stored half of window)
+            ch1=(int8_t)((*p1++)-128);              // Convert to signed char
+            ch2=(int8_t)((*p2++)-128);              // Convert to signed char
             T.FFT.bfly[i].r=FMULS(ch1, w);
 		    T.FFT.bfly[i].i=FMULS(ch2, w);
         } while (++i);
@@ -2445,11 +2437,11 @@ uint8_t fft_stuff(uint8_t *p1) {
         uint8_t i=0;
         do {
             uint8_t ch;
-		    w=pgm_read_byte_near(p3);           // Get window data
-		    if(testbit(Misc,bigfont)) w=127;	// No window
-		    if(i<127) p3++;                     // Window symmetry
-		    if(i>127) p3--;                     // (only stored half of window)
-            ch=(int8_t)((*p1++)-128);           // Convert to signed char
+		    uint8_t w=pgm_read_byte_near(windowp);  // Get window data
+		    if(testbit(Misc,bigfont)) w=127;        // No window
+		    if(i<127) windowp++;                    // Window symmetry
+		    if(i>127) windowp--;                    // (only stored half of window)
+            ch=(int8_t)((*p++)-128);                // Convert to signed char
             T.FFT.bfly[i].r=T.FFT.bfly[i].i=(signed int)(FMULS8(ch, w)*256);
         } while (++i);
 	}
@@ -2458,9 +2450,9 @@ uint8_t fft_stuff(uint8_t *p1) {
     fft_output(T.FFT.bfly, T.FFT.magn);
     // Find maximum frequency
     uint8_t max=3;
-    uint8_t i=1;                                // Ignore DC
-    if(T.FFT.magn[0]>T.FFT.magn[1]) i=2;  // Ignore big DC
-    f=0;
+    uint8_t i=1;                            // Ignore DC
+    if(T.FFT.magn[0]>T.FFT.magn[1]) i=2;    // Ignore big DC
+    uint8_t f=0;
     for(; i<FFT_N/2; i++) {
         uint8_t current=T.FFT.magn[i];
         if(current>max) {
@@ -2473,7 +2465,7 @@ uint8_t fft_stuff(uint8_t *p1) {
 
 // Automatically set vertical cursors
 void AutoCursorV(void) {
-    uint8_t i, mid, *p, samples;
+    uint8_t mid, *p, samples;
     if(Srate>=11) { // Slow sampling rates (below 50mS/div) use 2 samples per vertical line
         samples = 255;
     }
@@ -2499,7 +2491,7 @@ void AutoCursorV(void) {
             mid = CH2.min + CH2.vpp/2;
             if(CH2.vpp<8) goto end_scan;    // Signal too small
         }
-        i=0;
+        uint8_t i=0;
         if(p[0]<mid) {
             // Find first cross
             while(*p++<mid) { i++; if(i==samples) goto end_scan; }
@@ -2557,12 +2549,8 @@ static inline void Measurements(void) {
         } while(++i);
 		calibrate=(int16_t)eeprom_read_word((uint16_t *)&offset16CH1);      // CH1 Offset Calibration
         avrg1+=calibrate;
-		//calibrate=(int8_t)eeprom_read_byte((int8_t *)&gain8CH1);            // CH1 Gain Calibration
-		//avrg1=avrg1*(2048+calibrate)/2048;                                  // +/- 6.25% gain variation
 		calibrate=(int16_t)eeprom_read_word((uint16_t *)&offset16CH2);      // CH2 Offset Calibration
         avrg2+=calibrate;
-		//calibrate=(int8_t)eeprom_read_byte((int8_t *)&gain8CH2);            // CH2 Gain Calibration
-		//avrg2=avrg2*(2048+calibrate)/2048;                                  // +/- 6.25% gain variation
         T.IN.METER.Vdc[0]= avrg1>>5; // Exp. average: ((avrg1>>5)+Temp.IN.METER.Vdc[0])/2;
         T.IN.METER.Vdc[1]= avrg2>>5; // Exp. average: ((avrg2>>5)+Temp.IN.METER.Vdc[1])/2;
         ADCA.CH1.CTRL = oldch1;
@@ -2622,9 +2610,10 @@ cancelvdc:
             }
         }
         if(!testbit(MStatus,vdc)) { // Display CH1 and CH2 frequencies
-            freqv=pgm_read_dword_near(freqval+Srate)/256;
-            printF( 0,2,(int32_t)(CH1.f)*freqv);
-            printF(64,2,(int32_t)(CH2.f)*freqv);
+            uint32_t f;
+            f=pgm_read_dword_near(freqval+Srate)/256;
+            printF( 0,2,(int32_t)(CH1.f)*f);
+            printF(64,2,(int32_t)(CH2.f)*f);
         } else {                   // Display time 
             lcd_goto(48,1);
             printN3x6(hour); putchar3x6(':');
@@ -2650,12 +2639,12 @@ cancelfreq:
 // Display Vertical Cursor
 static inline void ShowCursorV(void) {
     char const *unitF;
-    uint8_t i,delta;
+    uint8_t delta;
     uint32_t freqv;
     if(Srate<=6) unitF = STR_KHZ;
     else unitF = STR_KHZ+1; // Hz: Use same text as kHz, with + 1 offset
 
-    for(i=1; i<=DISPLAY_MAX_Y; i+=4) {
+    for(uint8_t i=1; i<=DISPLAY_MAX_Y; i+=4) {
         set_pixel(M.VcursorA,i);
         set_pixel(M.VcursorB,2+i);
     }
@@ -2734,7 +2723,7 @@ static inline void ShowCursorH(void) {
 			dispHB=(HcursorB-M.HPos)>>1;
             for(uint8_t i=1; i<=(DISPLAY_MAX_X-1); i+=4) {
                 if(i<=DISPLAY_MAX_Y) set_pixel(dispHA,i);				// Vertical Line for HcursorA
-                if(dispHB<DISPLAY_MAX_Y) set_pixel(i+2,dispHB);     // Horizontal Line for HcursorB
+                if(dispHB<DISPLAY_MAX_Y) set_pixel(i+2,dispHB);         // Horizontal Line for HcursorB
             }
         }            
         else {
@@ -2804,12 +2793,12 @@ void CheckPost(void) {
     // Can't stop the ADC fast enough, so limit the range
     if(M.Tpost<255) {
         uint8_t adjust=0;
-        uint8_t Tpost;
-        Tpost = lobyte(M.Tpost);
-        if(Srate==0 && Tpost<8) adjust=8;
-        else if(Srate==1 && Tpost<5) adjust=5;
-        else if(Srate==2 && Tpost<5) adjust=5;
-        else if(Srate<=5 && Tpost<4) adjust=4;
+        uint8_t Tpost = lobyte(M.Tpost);
+        uint8_t SR = Srate;
+        if(SR==0 && Tpost<8) adjust=8;
+        else if(SR==1 && Tpost<5) adjust=5;
+        else if(SR==2 && Tpost<5) adjust=5;
+        else if(SR<=5 && Tpost<4) adjust=4;
         else if(Tpost==0) adjust=1;
         if(adjust) M.Tpost=adjust;
     }

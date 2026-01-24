@@ -13,7 +13,7 @@ extern int16_t EEMEM offset16CH2;
 extern int8_t EEMEM gain8CH1;
 extern int8_t EEMEM gain8CH2;
 extern int8_t  EEMEM offset8CH1[8][7];
-extern int8_t  EEMEM offset8CH2[7][7];
+extern int8_t  EEMEM offset8CH2[8][7];
 extern const uint8_t FLGPIO[12];
 extern uint8_t EEMEM EEGPIO[12];
 extern const int8_t Hamming[128];

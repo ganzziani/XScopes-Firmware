@@ -6,7 +6,7 @@
 #include "USB\usb_xmega.h"
 #include "utils.h"
 
-void LogicDMA(void);
+void ConfigLogicDMA(void);
 void DisplayData(uint8_t side, uint8_t page);
 
 //    0   1   2   3   4   5   6   7
@@ -93,7 +93,7 @@ const uint16_t TCC1val[8] PROGMEM = {
     277,    // 115200
 };
 
-void LogicDMA(void) {
+void ConfigLogicDMA(void) {
     setbit(DMA.CH0.CTRLA,6);    // reset DMA CH0
     setbit(DMA.CH1.CTRLA,6);    // reset DMA CH1
     // Flush receive buffers
@@ -210,7 +210,7 @@ void Sniff(void) {
             PORTC.PIN4CTRL = PORT_INVEN_bm;
         }
     }
-    LogicDMA();
+    ConfigLogicDMA();
     dma_display(); WaitDisplay();
     while((T.LOGIC.indrx==0) && (T.LOGIC.indtx==0)) {
         WDR();
@@ -351,7 +351,7 @@ void Sniff(void) {
                         setbit(SPIC.CTRL,6);        // Enable SPI
                     }
                     if(testbit(Mcursors, singlesniff)) {
-                        LogicDMA();
+                        ConfigLogicDMA();
                     }
                 }
             }
