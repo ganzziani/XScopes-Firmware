@@ -79,25 +79,6 @@ enum {  // Menu reference:
     MOUTSIDE    // Equal or above this -> out of range
 };
 
-typedef struct {
-    int8_t  offset;             // Channel offset
-    uint8_t max;                // Maximum value
-    uint8_t min;                // Minimum value
-    uint8_t vpp;                // Peak to peak
-    uint8_t f;                  // Maximum frequency
-} ACHANNEL;
-
-typedef struct {
-    uint8_t CH1data[256];       // CH1 Samples
-    uint8_t CH2data[256];       // CH2 Samples
-    uint8_t CHDdata[256];       // CHD Samples
-    uint8_t frame;              // Frame number
-    uint8_t index;              // Index number
-} DATA;
-
-extern ACHANNEL CH1, CH2;       // Analog Channel 1, Channel 2
-extern DATA DC;
-
 // Function prototypes
 void AutoSet(void);
 void MSO(void);
@@ -105,9 +86,5 @@ void Apply(void);                   // Apply oscilloscope settings
 void StartDMAs(void);
 void CheckPost(void);               // Check Post Trigger
 void SaveEE(void);                  // Save settings to EEPROM
-
-extern uint8_t old_s;
-extern uint8_t old_g1;
-extern uint8_t old_g2;
 
 #endif

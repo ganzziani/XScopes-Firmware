@@ -7,11 +7,14 @@
 uint8_t AWGBuffer[BUFFER_AWG]; // AWG Output Buffer
 uint8_t cycles;         // Cycles in AWG buffer
 
+// Move or shortcut the AWG frequency.
+// M.AWGdesiredF==0 is not guarded in moveF: the search ends with i=0, so add=1 and the decrement wraps
+// to 0xFFFFFFFF. BuildWave() repairs 0 back to 1 (0.01Hz) and CheckMax() clamps the wrapped value.
 void moveF(void) {
     uint8_t i=6;        // Start checking at 10KHz
 	do {                // Find frequency range
         if(M.AWGdesiredF>=pgm_read_dword_near(Powersof10+i)) break;
-    } while(i--);
+    } while(i-- >1);
     uint16_t add;
     if(i>=2) add=pgm_read_dword_near(Powersof10+i-2);
     else add=1;
@@ -51,7 +54,7 @@ void BuildWave(void) {
     }
     // Construct 256 bytes waveform
     
-    int8_t *p=(int8_t *)T.DATA.AWGTemp1;
+    int8_t *p=(int8_t *)T.AWGDATA.AWGTemp1;
     uint16_t Seed;
     uint8_t i=0;
     switch(M.AWGtype) {
@@ -78,24 +81,30 @@ void BuildWave(void) {
             do { *p++ = pgm_read_byte_near(Exp-128+i); } while(++i);
         break;
         case 5: // Custom wave from EEPROM
-            eeprom_read_block(T.DATA.AWGTemp1, EEwave, BUFFER_AWG);
+            eeprom_read_block(T.AWGDATA.AWGTemp1, EEwave, BUFFER_AWG);
         break;
     }
     // Prepare output buffer:
     // ******** Duty cycle ********
+    // Time-warp the 256-sample source (AWGTemp1) into the output (AWGTemp2) with a
+    // phase accumulator: 'step' advances by one increment over the source's first
+    // half and another over the second, so each half occupies an output span set by
+    // AWGduty (this shifts the waveform's midpoint = duty cycle). hibyte(step) is the
+    // output index; samples are linearly interpolated unless the no-interpolation
+    // flag (bigfont) is set (e.g. square wave).
     uint16_t step=0;
 	uint16_t inc;
     i=0; inc=(256-M.AWGduty)<<1;
-    p=(int8_t *)T.DATA.AWGTemp1;
+    p=(int8_t *)T.AWGDATA.AWGTemp1;
     do {
         uint8_t j=hibyte(step);
-        T.DATA.AWGTemp2[j] = *p;
+        T.AWGDATA.AWGTemp2[j] = *p;
         int8_t awgpoint;
         if(!testbit(Misc,bigfont)) {  // Interpolation
             int8_t k=*p++;
             awgpoint = (k+(*p))/2;
         } else awgpoint = *p++;         // No Interpolation
-        if(j<255) T.DATA.AWGTemp2[j+1] = awgpoint;
+        if(j<255) T.AWGDATA.AWGTemp2[j+1] = awgpoint;
         step+=inc;
         if(i==127) inc=M.AWGduty<<1;
     } while(++i);
@@ -117,7 +126,7 @@ void BuildWave(void) {
     i=0;
     do {
     // ******** Multiply by Gain ********
-        uint8_t j=FMULS8(M.AWGamp,T.DATA.AWGTemp2[(uint8_t)(i*cycles)]); // Keep index < 256
+        uint8_t j=FMULS8(M.AWGamp,T.AWGDATA.AWGTemp2[(uint8_t)(i*cycles)]); // Keep index < 256
     // ******** Add Offset ********
         AWGBuffer[i]=saddwsat(j,M.AWGoffset);
     } while(++i);

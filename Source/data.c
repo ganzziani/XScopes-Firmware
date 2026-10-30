@@ -47,7 +47,7 @@ uint8_t EEMEM EEGPIO[12] = {
 };
 
 // Default settings stored in flash
-const NVMVAR FLM PROGMEM = {            // Flash Copy
+const NVMVAR FLM PROGMEM = {    // Flash Copy
     1,      //  CH1gain;        // Channel 1 gain
     1,      //  CH2gain;        // Channel 2 gain
     64,     //  HPos:           // Center of the buffer
@@ -79,7 +79,7 @@ const NVMVAR FLM PROGMEM = {            // Flash Copy
 }; 
 
 // Saved settings stored in EEProm
-NVMVAR EEMEM EEM = {                    // EEMEM Copy
+NVMVAR EEMEM EEM = {            // EEMEM Copy
     1,      //  CH1gain;        // Channel 1 gain
     1,      //  CH2gain;        // Channel 2 gain
     64,     //  HPos:           // Center of the buffer

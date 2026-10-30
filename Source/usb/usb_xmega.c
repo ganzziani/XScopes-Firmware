@@ -8,10 +8,10 @@
 // Licensed under the terms of the GNU GPLv3+
 
 #include <util/delay.h>
-#include "main.h"
+#include "..\main.h"
 #include "usb_xmega.h"
-#include "mso.h"
-#include "interface.h"
+#include "..\mso.h"
+#include "..\interface.h"
 
 // Volatile?
 uint8_t ep0_buf_in[USB_EP0SIZE];
@@ -112,7 +112,7 @@ void USB_ResetInterface(void) {
 	// Configure Endpoint 1 for BULK transfers, Multipacket enabled
 	endpoints[1].in.STATUS = USB_EP_BUSNACK0_bm | USB_EP_TRNCOMPL0_bm;
 	endpoints[1].in.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_MULTIPKT_bm | USB_EP_size_to_gc(64);
-	endpoints[1].in.DATAPTR = (uint16_t)DC.CH1data;
+	endpoints[1].in.DATAPTR = (uint16_t)T.SCOPE.DC.CH1data;
 	endpoints[1].out.STATUS = 0; // Accept new data
 	endpoints[1].out.CTRL = USB_EP_TYPE_BULK_gc | USB_EP_MULTIPKT_bm | USB_EP_size_to_gc(64);
 	endpoints[1].out.DATAPTR = (uint16_t)AWGBuffer;

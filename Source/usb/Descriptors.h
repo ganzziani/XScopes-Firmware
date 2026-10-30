@@ -33,7 +33,7 @@
 #define _DESCRIPTORS_H_
 
 #include <avr/pgmspace.h>
-#include <USB/usb_xmega.h>
+#include "usb_xmega.h"
 
 /* Type Defines: */
 /** Type define for the device configuration descriptor structure. This must be defined in the

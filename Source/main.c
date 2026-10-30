@@ -1,13 +1,3 @@
-// TODO & Optimizations
-/*      Custom bootloader:
-            - Save constants tables in bootloader
-            - Calibration in User Signature Row
-        Detect low voltage with comparator
-        Force trigger, Trigger timeout in menu
-        USE NVM functions from BOOT */
-
-// TODO Expansion boards: SD, Keyboard, Display, RS232, MIDI, Video, RAM
-
 /* Hardware resources:
     Timers:
         RTC   Clock for menu and sleep timeout
@@ -393,8 +383,8 @@ void CalibrateOffset(void) {
                 M.CH1gain=i;
                 M.CH2gain=i;
                 SimpleADC();
-                q1=T.IN.CH1;
-                q2=T.IN.CH2;
+                q1=T.SCOPE.TempCH1;
+                q2=T.SCOPE.TempCH2;
                 // Calculate offset for CH1
                 avrg1=0;
                 avrg2=0;
@@ -407,13 +397,13 @@ void CalibrateOffset(void) {
                 ONGRN();
                 eeprom_write_byte((uint8_t *)&offset8CH1[Srate][i], avrg8);
                 j = 32+avrg8; // add 32 to center on screen
-                if(j<64) lcd_line(s,32,s,j);
+                if(j<64) set_line(s,32,s,j);
                 else ONRED();
                 if(Srate) {
                     avrg8=avrg2>>8;
                     eeprom_write_byte((uint8_t *)&offset8CH2[Srate-1][i], avrg8);
                     j = 32+avrg8; // add 32 to center on screen
-                    if(j<64) lcd_line(s+64,32,s+64,j);
+                    if(j<64) set_line(s+64,32,s+64,j);
                     else ONRED();
                 }
                 dma_display(); WaitDisplay();
@@ -434,9 +424,9 @@ void CalibrateOffset(void) {
         } while(++i);
         eeprom_write_word((uint16_t *)&offset16CH1, avrg1/*+0x08*/);
         eeprom_write_word((uint16_t *)&offset16CH2, avrg2/*+0x08*/);
+        eeprom_write_byte(&EECalibrated, 1);    // Calibration complete!
     }
     Buttons=0;
-    eeprom_write_byte(&EECalibrated, 1);    // Calibration complete!
 }
 
 // Fill up channel data buffers
@@ -452,6 +442,7 @@ void SimpleADC(void) {
     clrbit(DMA.CH1.CTRLA, 7);
 }
 
+// Delay in mili seconds
 void delay_ms(uint8_t n) {
     WDR();  // Clear watchdog
     for(;n;n--) _delay_ms(1);

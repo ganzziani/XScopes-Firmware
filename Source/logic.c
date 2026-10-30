@@ -42,7 +42,7 @@ void HEXSerial(void) {
         index+=increment;
         if(CHDmask&mask) {					// Is this channel on?
             for(uint8_t i=1; i<=32; i++) {	// Scan buffer
-                data = DC.CHDdata[hibyte(index)];
+                data = T.SCOPE.DC.CHDdata[hibyte(index)];
                 if(!(i&0x03)) {				// Time to check bits when i is multiple of 4
                     result<<=1;
                     if(bit) result+=1;
@@ -104,7 +104,7 @@ void ConfigLogicDMA(void) {
 
 	uint8_t src_addr_lo;
     uint8_t src_addr_hi;
-	uint8_t trig_src;
+	uint8_t trig_src = 0;
 
 	// Configure CH0 for RX data
     DMA.CH0.ADDRCTRL  = 0b10000101;     // reload source addr after each burst, incr dest, reload dest end block
@@ -157,7 +157,7 @@ void Sniff(void) {
                     // one page has 8 lines, each line will display
                     // 8 bytes in this format: "FF+ "
     clr_display();
-    uint8_t *p=T.LOGIC.data.All.decoded;
+    uint8_t *p=T.LOGIC.data.decoded;
     for(; i<BUFFER_SERIAL*2+2; i++) *p++=0;   // Erase buffers and index
     T.LOGIC.indrx=0; T.LOGIC.indtx=0;
     if(testbit(Trigger, round)) page=0x0F;  // Go to last page
@@ -188,7 +188,7 @@ void Sniff(void) {
             else databits |= 0x20;
         }
         if(testbit(Sniffer,stopbit)) databits |= 0x08;    // Second stop bit
-        USARTC0.CTRLC = databits;       // Async, No Parity, 1 stop bit, 8 data bits
+        USARTC0.CTRLC = databits;
                 
         USARTC0.CTRLB = 0x10;       // Enable RX
         TCC1.CTRLA = 0x01;  // DIV1
@@ -239,11 +239,11 @@ void Sniff(void) {
 		if((endpoints[1].in.STATUS & USB_EP_TRNCOMPL0_bm)) {
     		endpoints[1].in.AUXDATA = 0;				// New transfer must clear AUXDATA
             if(!testbit(Misc,sacquired)) {
-               	endpoints[1].in.DATAPTR = (uint16_t)T.LOGIC.data.All.decoded;
+               	endpoints[1].in.DATAPTR = (uint16_t)T.LOGIC.data.decoded;
         		endpoints[1].in.CNT = 640;	    // Send first half
             }
             else {
-               	endpoints[1].in.DATAPTR = (uint16_t)T.LOGIC.data.All.decoded+640;
+               	endpoints[1].in.DATAPTR = (uint16_t)T.LOGIC.data.decoded+640;
         		endpoints[1].in.CNT = 649;	    // Send second half
             }
     		endpoints[1].in.STATUS &= ~(USB_EP_TRNCOMPL0_bm | USB_EP_BUSNACK0_bm | USB_EP_OVF_bm);
@@ -311,13 +311,13 @@ void Sniff(void) {
                 }
             }
             if(testbit(MStatus, stop)) {
-                lcd_line(63,8,63,30);
+                set_line(63,8,63,30);
                 const char *c=STR_STOP;
                 for(uint8_t y=TEXT_LAST_LINE-3; y<=TEXT_LAST_LINE; y++) {   // Print STOP vertically
                     lcd_goto(62,y); putchar3x6(pgm_read_byte(c++));
                 }
             }
-            else lcd_line(63,8,63,DISPLAY_MAX_Y);
+            else set_line(63,8,63,DISPLAY_MAX_Y);
             uint8_t printpage=page;
             if(testbit(CHDctrl,ascii)) printpage&=0xFE;     // Only display even pages
             lcd_goto(62,0); putchar3x6(NibbleToChar(printpage));
@@ -362,7 +362,7 @@ void Sniff(void) {
     } while (testbit(MStatus,gosniffer));
 exitSniffer:
     Buttons=0;
-   	endpoints[1].in.DATAPTR = (uint16_t)DC.CH1data;
+   	endpoints[1].in.DATAPTR = (uint16_t)T.SCOPE.DC.CH1data;
 	endpoints[1].in.STATUS = USB_EP_BUSNACK0_bm | USB_EP_TRNCOMPL0_bm;
     clrbit(Misc,sacquired);
     USARTC0.CTRLA = 0x00;   // Disable receive interrupt

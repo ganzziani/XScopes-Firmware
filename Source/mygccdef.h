@@ -88,8 +88,8 @@ static __inline__ void SLP (void) { __asm__ volatile ( "sleep  " "\n\t" ); }
 
 // 8:8 Fixed Point Math
 typedef int16_t fixed;
-#define int2fix(a)   (((int16_t)(a))<<8)            // Convert char to fix
-#define fix2int(a)   ((int8_t)((a)>>8))             // Convert fix to char
+#define int2fix(a)   (((int16_t)(a))<<8)            // Convert integer to 8:8
+#define fix2int(a)   ((int8_t)((a)>>8))             // Convert 8:8 to integer
 #define float2fix(a) ((int16_t)((a)*256.0))         // Convert float to fix
 #define fix2float(a) ((float)(a)/256.0)             // Convert fix to float
 #define multfix(a,b) ((int16_t)((((int32_t)(a))*((int32_t)(b)))>>8)) // Multiply two fixed

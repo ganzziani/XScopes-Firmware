@@ -26,6 +26,25 @@ set_pixel:
     las     z, r24                  ; Set bits in display data
     ret
 
+; Same as pixel(x,16), set_pixel(x,32), set_pixel(x,48)
+.global set_pixel_v3                ; void set_pixel_v3(uint8_t x);
+set_pixel_v3:
+    ldi     r30, lo8(Disp_send+3+256)   ; r31:r30 = &display_data[x + page 2]
+    ldi     r31, hi8(Disp_send+3+256)
+    add     r30, r24                ; r30 += x
+    adc     r31, r1
+    ldi     r24, 0x01               ; r24 = 1 (bit 0 of rows 16, 32 and 48)
+    las     z, r24                  ; Set bits in display data (returns old byte in r24)
+    subi    r30, lo8(-256)          ; Next page (+128 bytes)
+    sbci    r31, hi8(-256)
+    ldi     r24, 0x01               ; las destroyed r24, reload the mask
+    las     z, r24                  ; Set bits in display data
+    subi    r30, lo8(-256)          ; Next page (+128 bytes)
+    sbci    r31, hi8(-256)
+    ldi     r24, 0x01               ; las destroyed r24, reload the mask
+    las     z, r24                  ; Set bits in display data
+    ret
+
 ; Disp_send.display_data[((uint16_t)(u8CursorY<<7)) + (u8CursorX++)] |= data;
 .global display_or                      ; void write_display(uint8_t data);
 display_or:                             ; OR byte on display buffer
@@ -42,10 +61,10 @@ display_or:                             ; OR byte on display buffer
     las     z, r24                      ; Set bits in display data
     ret
 
-; void lcd_line(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2)
+; void set_line(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2)
 ; Parameters: r24=x1, r22=y1, r20=x2, r18=y2
-.global lcd_line
-lcd_line:
+.global set_line
+set_line:
     ; Register allocation (all call-clobbered):
     ; r31:r30 (Z) = buffer pointer
     ; r27 = current bit mask
