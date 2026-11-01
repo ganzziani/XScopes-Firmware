@@ -305,6 +305,8 @@ const uint16_t movetable[] PROGMEM = {
     (uint16_t)&M.CH2pos,
 };
 
+// Average of two bytes without overflow: add sets carry from the 9-bit sum,
+// ror shifts it back in as bit 7, yielding (a+b)>>1.
 static inline uint8_t average (uint8_t a, uint8_t b) {
     asm ("add  %0, %1"   "\n\t"
          "ror %0"
@@ -2422,7 +2424,7 @@ uint8_t fft_stuff(uint8_t *p) {
 		    if(i>127) windowp--;                    // (only stored half of window)
             ch=(int8_t)((*p++)-128);                // Convert to signed char
             T.SCOPE.FFT.bfly[i].r=(signed int)(FMULS8(ch, w)*256);
-            T.SCOPE.FFT.bfly[i].i=0;    // Real input only: r=i would overflow the butterflies (fft_output compensates the gain)
+            T.SCOPE.FFT.bfly[i].i=0;                // Real input only
         } while (++i);
     }
     clrbit(Misc,bigfont);
@@ -2761,11 +2763,11 @@ static inline void ShowCursorH(void) {
 }
 
 // Check variables
-extern const NVMVAR MAXM;
+extern const uint8_t MAXM[];
 void CheckMax(void) {
     uint8_t *p=&M.CH1gain;
-    for(uint8_t i=0; i<sizeof(NVMVAR); i++) {
-        uint8_t max=pgm_read_byte(&MAXM.CH1gain+i);
+    for(uint8_t i=0; i<offsetof(NVMVAR, AWGdesiredF); i++) {   // AWGdesiredF is checked in BuildWave()
+        uint8_t max=pgm_read_byte(&MAXM[i]);
         if(*p>=max) *p=max;
         p++;
     }

@@ -110,8 +110,9 @@ NVMVAR EEMEM EEM = {            // EEMEM Copy
     44000,  //  AWGdesiredF;    // Desired frequency 440Hz
 };
 
-// Maximum values
-const NVMVAR MAXM PROGMEM = {   // Flash Copy
+// Maximum values, one byte per byte of NVMVAR, checked byte-wise by CheckMax().
+// Ends before AWGdesiredF: BuildWave() limits the frequency.
+const uint8_t MAXM[] PROGMEM = {   // Flash Copy
     6,      //  CH1gain;        // Max Gain is 6
     6,      //  CH2gain;        // Max Gain is 6
     127,    //  HPos            // Max Horizontal Position
@@ -122,7 +123,8 @@ const NVMVAR MAXM PROGMEM = {   // Flash Copy
     127,    //  Hcursor2A;      // Max cursor position
     127,    //  Hcursor2B;      // Max cursor position
     255,    //  thold;          //
-    0x7FFF, //  Tpost;          // Max Post Trigger
+    0xFF,   //  Tpost low byte  // Max Post Trigger 0x7FFF
+    0x7F,   //  Tpost high byte
     10,     //  Tsource;        // 10 Trigger sources
     252,    //  Tlevel;         // Max Trigger Level
     255,    //  Window1;        //
@@ -139,8 +141,8 @@ const NVMVAR MAXM PROGMEM = {   // Flash Copy
     5,      //  AWGtype;        // 5 waveform type
     255,    //  AWGduty;        //
     255,    //  AWGoffset;      //
-    0x00BEFFFF,  //  AWGdesiredF;    // Max set to 125.17375kHz
 };
+_Static_assert(sizeof(MAXM)==offsetof(NVMVAR, AWGdesiredF), "MAXM must match NVMVAR up to AWGdesiredF");
 
 // Hamming window = 0.53836-0.46164*COS(2*PI*n/(FFT_N-1))
 const int8_t Hamming[128] PROGMEM = {

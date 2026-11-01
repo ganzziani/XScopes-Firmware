@@ -191,6 +191,7 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
                 setbit(MStatus, updatemso);		// Settings are changing
             }
             if(index>=36) setbit(MStatus, updateawg);
+            if(index==8) T.SCOPE.adjusting=0;   // Mode change: cancel auto setup (as RestorefromMeter does)
             if(index<12) p=(uint8_t *)index;	    // Accessing GPIO
             else {
                 index-=12;
@@ -247,6 +248,7 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
 		break;
         case 'k':   // Restore factory settings
             Restore();
+            T.SCOPE.adjusting=0;            // Don't auto setup over the factory settings
             setbit(MStatus,update);
             setbit(MStatus, updatemso);     // Apply settings
             setbit(MStatus, updateawg);     // Generate wave                       
