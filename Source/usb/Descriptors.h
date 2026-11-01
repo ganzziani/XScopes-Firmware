@@ -46,6 +46,12 @@ typedef struct {
 	USB_Descriptor_Endpoint_t           DataOutEndpoint;
 } USB_Descriptor_Configuration_t;
 
+/** Vendor request code for the Microsoft OS descriptors. Must not be a ProcessCommand() command. */
+#define MS_VENDOR_CODE  'M'
+
+extern const uint8_t XmegaScope_MSOSString[18];
+extern const uint8_t XmegaScope_MSCompatID[40];
+
 /* Function Prototypes: */
 uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
                                     const uint8_t wIndex,

@@ -50,7 +50,7 @@ const USB_Descriptor_Device_t PROGMEM XmegaScope_DeviceDescriptor = {
 	.Endpoint0Size          = USB_EP0SIZE,
 	.VendorID               = 0x16D0,
 	.ProductID              = 0x06F9,
-	.ReleaseNumber          = VERSION_BCD(01.00),
+	.ReleaseNumber          = VERSION_BCD(01.01),	// Bumped so Windows re-reads the MS OS descriptors
 	.ManufacturerStrIndex   = 0x01,
 	.ProductStrIndex        = 0x02,
 	.SerialNumStrIndex      = USE_INTERNAL_SERIAL,
@@ -123,6 +123,26 @@ const USB_Descriptor_String_t PROGMEM XmegaScope_ProductString = {
 };
 
 
+/** Microsoft OS 1.0 string descriptor (index 0xEE): "MSFT100" plus the vendor request code that
+ *  Windows uses to fetch the Extended Compat ID below. Windows 8+ then binds WinUSB, no .inf needed. */
+const uint8_t PROGMEM XmegaScope_MSOSString[18] = {
+	18, DTYPE_String, 'M',0, 'S',0, 'F',0, 'T',0, '1',0, '0',0, '0',0, MS_VENDOR_CODE, 0
+};
+
+/** Microsoft OS 1.0 Extended Compat ID descriptor: interface 0 is compatible with "WINUSB". */
+const uint8_t PROGMEM XmegaScope_MSCompatID[40] = {
+	40, 0, 0, 0,		// dwLength
+	0x00, 0x01,			// bcdVersion 1.00
+	0x04, 0x00,			// wIndex: Extended Compat ID
+	1,					// bCount: one function section
+	0, 0, 0, 0, 0, 0, 0,
+	0,					// bFirstInterfaceNumber
+	1,					// Reserved, must be 1
+	'W','I','N','U','S','B',0,0,	// compatibleID
+	0, 0, 0, 0, 0, 0, 0, 0,			// subCompatibleID
+	0, 0, 0, 0, 0, 0
+};
+
 /** This function is called by the library when in device mode, and must be overridden (see library "USB Descriptors"
  *  documentation) by the application code so that the address and size of a requested descriptor can be given to the
  *  USB library. When the device receives a Get Descriptor request on the control endpoint, this function is called
@@ -158,6 +178,10 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
 				case 0x02:
 					Address = &XmegaScope_ProductString;
 					Size    = pgm_read_byte(&XmegaScope_ProductString.Header.Size);
+					break;
+				case 0xEE:
+					Address = &XmegaScope_MSOSString;
+					Size    = sizeof(XmegaScope_MSOSString);
 					break;
 			}
 			break;
