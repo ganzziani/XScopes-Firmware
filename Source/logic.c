@@ -102,19 +102,19 @@ void ConfigLogicDMA(void) {
     }
     if(SPIC.STATUS) (void)SPIC.DATA;	// dummy read
 
-	uint8_t src_addr_lo;
+    uint8_t src_addr_lo;
     uint8_t src_addr_hi;
-	uint8_t trig_src = 0;
+    uint8_t trig_src = 0;
 
-	// Configure CH0 for RX data
+    // Configure CH0 for RX data
     DMA.CH0.ADDRCTRL  = 0b10000101;     // reload source addr after each burst, incr dest, reload dest end block
     DMA.CH0.TRFCNT    = BUFFER_SERIAL;            // buffer size
 
-	// Set destination address for CH0 RX data (ensure proper casting)
+    // Set destination address for CH0 RX data (ensure proper casting)
     DMA.CH0.DESTADDR0 = (((uint16_t) T.LOGIC.data.Serial.RX)     ) & 0xFF;
     DMA.CH0.DESTADDR1 = (((uint16_t) T.LOGIC.data.Serial.RX)>>1*8) & 0xFF;
 
-	// Configure based on protocol type (RS232 or SPI)
+    // Configure based on protocol type (RS232 or SPI)
     if(M.CHDdecode == rs232) {
         trig_src   = 0x4B;               // USARTC0 trigger source
         src_addr_lo = (((uint16_t)(&USARTC0.DATA))     ) & 0xFF;
@@ -235,6 +235,7 @@ void Sniff(void) {
 ////////////////////////////////////////////////////////////////////////////////////
 // DISPLAY
 ////////////////////////////////////////////////////////////////////////////////////
+    uint8_t stopped=0;              // MSO() cleared MStatus.stop before calling Sniff()
     do {
         dma_display(); WaitDisplay();
         clr_display();
@@ -337,31 +338,33 @@ void Sniff(void) {
         if(testbit(Buttons, userinput)) {
             clrbit(Buttons, userinput);
             if (testbit(Buttons,K2) && testbit(Buttons,K3)) togglebit(CHDctrl,ascii);
-            if (testbit(Buttons,K1)) {
-                togglebit(MStatus, stop);
-                if(testbit(MStatus, stop)) {    // Stop sniffer
-                    USARTC0.CTRLB = 0x00;       // Disable RX
-                    clrbit(SPIC.CTRL,6);        // Disable SPI
-                    if(M.CHDdecode==i2c) PORTC.INTCTRL = 0x00;   // Disable PORTC interrupts
-                }
-                else {                          // Restart Sniffer
-                    if(M.CHDdecode==i2c) {
-                        PORTC.INTCTRL   = 0x03;     // Enable PortC INT 0, High Priority
-                    }
-                    else if(M.CHDdecode==rs232) {
-                        USARTC0.CTRLB = 0x10;       // Enable RX
-                    }
-                    else if(M.CHDdecode==spi) {
-                        setbit(SPIC.CTRL,6);        // Enable SPI
-                    }
-                    if(testbit(Mcursors, singlesniff)) {
-                        ConfigLogicDMA();
-                    }
-                }
-            }
+            if (testbit(Buttons,K1)) togglebit(MStatus, stop);
             if (testbit(Buttons,K2)) if(page)    page--;
             if (testbit(Buttons,K3)) if(page<15) page++;
             if (testbit(Buttons,KM)) clrbit(MStatus,gosniffer);  // Exit sniffer
+        }
+        // Act on any change of MStatus.stop: K1, 'f'/'g' from USB or UART, single sniff complete
+        if((MStatus ^ stopped) & _BV(stop)) {
+            stopped ^= _BV(stop);
+            if(stopped) {                   // Stop sniffer
+                USARTC0.CTRLB = 0x00;       // Disable RX
+                clrbit(SPIC.CTRL,6);        // Disable SPI
+                if(M.CHDdecode==i2c) PORTC.INTCTRL = 0x00;   // Disable PORTC interrupts
+            }
+            else {                          // Restart Sniffer
+                if(M.CHDdecode==i2c) {
+                    PORTC.INTCTRL   = 0x03;     // Enable PortC INT 0, High Priority
+                }
+                else if(M.CHDdecode==rs232) {
+                    USARTC0.CTRLB = 0x10;       // Enable RX
+                }
+                else if(M.CHDdecode==spi) {
+                    setbit(SPIC.CTRL,6);        // Enable SPI
+                }
+                if(testbit(Mcursors, singlesniff)) {
+                    ConfigLogicDMA();
+                }
+            }
         }
     } while (testbit(MStatus,gosniffer));
 exitSniffer:
@@ -585,6 +588,9 @@ ISR(TCC1_CCA_vect) {
 
     // Start Bit: low in the middle of a bit
     if(testbit(VPORT2.IN, 3)) return;
+    // A start edge right after the compare (during the interrupt entry) also restarted TCC1:
+    // this is the beginning of the start bit, wait for its middle (CCA >= 138 at 115200)
+    if(TCC1.CNT < 128) return;
 
     // Data bits
     for(i=0; i<T.LOGIC.databits; i++) {

@@ -9,7 +9,7 @@ uint8_t cycles;         // Cycles in AWG buffer
 
 // Move or shortcut the AWG frequency.
 // M.AWGdesiredF==0 is not guarded in moveF: the search ends with i=0, so add=1 and the decrement wraps
-// to 0xFFFFFFFF. BuildWave() repairs 0 back to 1 (0.01Hz) and CheckMax() clamps the wrapped value.
+// to 0xFFFFFFFF. BuildWave() repairs 0 back to 1 (0.01Hz) and clamps the wrapped value.
 void moveF(void) {
     uint8_t i=6;        // Start checking at 10KHz
 	do {                // Find frequency range
@@ -36,12 +36,12 @@ void moveF(void) {
 void BuildWave(void) {
     if(M.AWGamp>0)      M.AWGamp=0;         // AWGAmp must be negative
     if(M.AWGduty==0)    M.AWGduty=1;        // Zero is invalid
-    uint8_t *pf = (uint8_t *)&M.AWGdesiredF;           // Get address of M.AWGdesiredF
+    uint8_t *pf = (uint8_t *)&M.AWGdesiredF;// Get address of M.AWGdesiredF
+    pf[3]=0; if(pf[2]>0xBE) pf[2]=0xBE;     // Maximum Freq= 0x00BEFFFF (125.17375kHz), checked byte by byte
     if(M.AWGdesiredF==0)  *pf = 1;          // Minimum Freq= 0.01Hz (only need to access lower byte of M.AWGdesiredF)
-    // Maximum Frequency check done at CheckMax function
-    
+
     // Determine number of cycles
-    //  F > 15728Hz -> cycles = 32, prescale = 1   (Period range:   254 - 31) -> Max 125,173.75 (max set in MAXM struct)
+    //  F > 15728Hz -> cycles = 32, prescale = 1   (Period range:   254 - 31) -> Max 125,173.75 (checked above)
     //  F >  7864Hz -> cycles = 16, prescale = 1   (Period range:   254 - 127)
     //  F >  3932Hz -> cycles =  8, prescale = 1   (Period range:   254 - 127)
     //  F >  1966Hz -> cycles =  4, prescale = 1   (Period range:   254 - 127)
