@@ -2,7 +2,7 @@
 #define _ASMUTIL_H
 
 void    set_pixel(uint8_t x, uint8_t y);
-void    set_pixel_v3(uint8_t x);             // Dots at (x,16), (x,32), (x,48)
+void    vertical_dots(uint8_t x);           // Dots at (x,16), (x,32), (x,48)
 void	display_or(uint8_t data);           // OR data with display buffer
 void    set_line(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2);
 uint8_t addwsat(uint8_t a, int8_t b);

@@ -1,6 +1,5 @@
 #include <avr/io.h>
 #include <util/delay.h>
-#include <util/crc16.h>
 #include <avr/interrupt.h>
 #include "main.h"
 #include "mso.h"
@@ -71,9 +70,11 @@ static inline uint8_t transpose(uint8_t x, uint8_t y) {
 }
 
 // Send data from LCD to PC via RS-232 using the XMODEM protocol
+// The CRC module's CRC-16 is CRC-16/XMODEM (poly 0x1021, MSB first)
 static inline void SendBMP(void) {
     uint8_t rx,data,Packet=1, n=0,i,j;
-    uint16_t crc=0;
+    CRC.CTRL = CRC_RESET_RESET0_gc;     // CHECKSUM = 0
+    CRC.CTRL = CRC_SOURCE_IO_gc;        // CRC on data written to DATAIN
 
     // First Block
     send(SOH);
@@ -83,7 +84,7 @@ static inline void SendBMP(void) {
     for(i=0; i<62; i++) {
         n++;
         data = pgm_read_byte_near(BMP+i);
-        crc=_crc_xmodem_update(crc,data);
+        CRC.DATAIN = data;
         send(data);
     }
 
@@ -92,13 +93,13 @@ static inline void SendBMP(void) {
         // Each LCD line consists of 16 bytes
         for(j=0; j<16; j++) {
             data=transpose(j*8,i);
-            crc=_crc_xmodem_update(crc,data);
+            CRC.DATAIN = data;
             send(data);
             n++;
             if(n==128)  {   // end of 128byte block
                 n=0;
-                send(hibyte(crc));
-                send(lobyte(crc));
+                send(CRC.CHECKSUM1);
+                send(CRC.CHECKSUM0);
                 // Wait for ACK
                 rx = read();
                 if(rx!=ACK) return; // Error -> cancel transmission
@@ -106,7 +107,8 @@ static inline void SendBMP(void) {
                 send(SOH);
                 send(Packet);		// Send Packet number
                 send(255-Packet);	// Send Packet number 1's complement
-                crc=0;
+                CRC.CTRL = CRC_RESET_RESET0_gc;
+                CRC.CTRL = CRC_SOURCE_IO_gc;
             }
         }
     }
@@ -114,11 +116,11 @@ static inline void SendBMP(void) {
     // End of last block
     for(; n<128; n++) { // send remainder of block
         data= 0x1A;     // pad with 0x1A which marks the end of file
-        crc=_crc_xmodem_update(crc,data);
+        CRC.DATAIN = data;
         send(data);
     }
-    send(hibyte(crc));
-    send(lobyte(crc));
+    send(CRC.CHECKSUM1);
+    send(CRC.CHECKSUM0);
     rx = read();
     if(rx!=ACK) return;
     send(EOT);
@@ -249,6 +251,27 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
             setbit(MStatus, updatemso);     // Apply settings
             setbit(MStatus, updateawg);     // Generate wave                       
         break;
+#ifdef TESTFIXTURE
+        // Bench diagnostic, test-fixture build only: read SRAM so the fixture can
+        // check what a command actually wrote instead of inferring it from the
+        // analog output - e.g. whether the 'x' upload is in AWGBuffer, and for how
+        // long it stays there.
+        //
+        //   'r'  addr_lo  addr_hi  count   ->  count raw bytes of data space
+        //
+        // Read-only by design (the fixture must not be able to write DUT memory
+        // this way), and UART-only: read() waits on USARTE0, so taking this over
+        // USB would stall the control endpoint (CR-039).
+        case 'r':
+            if(usb) break;
+            i = read();                 // low address byte
+            n = read();                 // high address byte
+            p = (uint8_t *)((uint16_t)((n << 8) | i));
+            n = read();                 // byte count, 0 sends nothing
+            while(n--) send(*p++);
+            n = 0;
+        break;
+#endif
         case 'l':
             for(uint16_t i=0; i<1280; i++) {
                 send(T.LOGIC.data.decoded[i]);
@@ -278,13 +301,12 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
             send('G');   // confirmation
             p=AWGBuffer;
             do { *p++ = read(); } while(++i);
-            setbit(MStatus, updateawg);
             send('T');   // confirmation
         break;
         case 'C': SendBMP(); break; // Send BMP
 		case 0xBB: // disconnect from USB, jump to bootloader
-			USB_ep0_in_start(0);
             // USB_ep0_wait_for_complete
+			USB_ep0_in_start(0);
             endpoints[0].out.STATUS &= ~(USB_EP_SETUP_bm | USB_EP_TRNCOMPL0_bm | USB_EP_BUSNACK0_bm);
             while (!(endpoints[0].out.STATUS & USB_EP_TRNCOMPL0_bm) && !(endpoints[0].in.STATUS & USB_EP_TRNCOMPL0_bm)){};
 			cli();

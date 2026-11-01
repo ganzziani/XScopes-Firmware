@@ -854,7 +854,7 @@ void MSO(void) {
                 }
                 if(testbit(MFFT,iqfft)) {   // Display new FFT data
                     if(Display&0x03) {              // Grid
-                        set_pixel_v3(M.HPos);   // Vertical dots at 16, 32, 48
+                        vertical_dots(M.HPos);   // Vertical dots at 16, 32, 48
 			        }
                     fft_stuff(NULL);
                     for(uint8_t i=0; i<FFT_N/2; i++) {
@@ -2155,7 +2155,7 @@ checknext:
                 }
                 switch(Display&0x03) {
                     case 1: // Vertical dots
-                        set_pixel_v3(64);
+                        vertical_dots(64);
                     case 2:
                         for(uint8_t i=16; i<=112; i+=16) {
                             if(testbit(CH1ctrl,chon)) set_pixel(i,ch1gnd);          // CH1 ground
@@ -2276,7 +2276,7 @@ checknext:
                     chdtrigpos=trigpos;
                     if(trigpos<126 && M.Tsource<=1) {
                         if((Display&0x03)==2) {     // Grid Vertical dots follow trigger
-                            set_pixel_v3(trigpos);
+                            vertical_dots(trigpos);
                         }
                         if(testbit(Trigger, window)) {
                             if(trig1<=(DISPLAY_MAX_Y-3) && testbit(Misc, bigfont)) { // up
@@ -2421,7 +2421,8 @@ uint8_t fft_stuff(uint8_t *p) {
 		    if(i<127) windowp++;                    // Window symmetry
 		    if(i>127) windowp--;                    // (only stored half of window)
             ch=(int8_t)((*p++)-128);                // Convert to signed char
-            T.SCOPE.FFT.bfly[i].r=T.SCOPE.FFT.bfly[i].i=(signed int)(FMULS8(ch, w)*256);
+            T.SCOPE.FFT.bfly[i].r=(signed int)(FMULS8(ch, w)*256);
+            T.SCOPE.FFT.bfly[i].i=0;    // Real input only: r=i would overflow the butterflies (fft_output compensates the gain)
         } while (++i);
     }
     clrbit(Misc,bigfont);

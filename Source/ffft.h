@@ -161,51 +161,47 @@ int8_t Sin(uint8_t angle);
 	adc	\d3, EH
 .endm
 
-;  r5: r4: r3:r2  - input
-;     r20:r19:r18 - answer
-;      r8: r7: r6 - remainder
-;             r23 - loop count
-.macro	SQRT32          ; 32bit square root (526..542clk)
-    clr     r6          ; clear remainder
-    clr     r7
-    clr     r8
-    clr     r18         ; clear answer
+.macro	FMULS16x8	d3,d2,d1 ,s1h,s1l, s2	;Fractional Multiply 16x8 (9clk), d0 would be 0
+	fmuls	\s1h, \s2
+	movw	\d2, T0L
+	fmulsu	\s2, \s1l
+	sbc	\d3, EH ;EH: zero reg.
+	mov	\d1, T0L
+	add	\d2, T0H
+	adc	\d3, EH
+.endm
+
+;  r5: r4: r3:r2  - input (not modified)
+;         r19:r18 - answer, floor(sqrt(input))
+;         r21:r20 - trial bit, r7:r6 - trial answer, r9:r8:r27:r26 - trial^2
+.macro	SQRT32          ; 32bit square root, one answer bit per pass using MUL (435clk)
+    clr     r18         ; answer = 0
     clr     r19
-    clr     r20
-    ldi     r23,16      ; Init loop count to 16
-sqrt32loop:
-    lsl     r18         ; answer <<= 1
-    rol     r19
-    rol     r20
-    lsl     r2          ; shift two MSBs into remainder
-    rol     r3
-    rol     r4
-    rol     r5
-    rol     r6
-    rol     r7
-    rol     r8
-    lsl     r2
-    rol     r3
-    rol     r4
-    rol     r5
-    rol     r6
-    rol     r7
-    rol     r8
-    cp      r18,r6      ; answer < remainder ?
-    cpc     r19,r7
-    cpc     r20,r8
-    brcc    sqrt32bitdone
-    inc     r18         ; answer++, lsb = 0
-    sub     r6,r18      ; remainder -= answer
-    sbc     r7,r19
-    sbc     r8,r20
-    inc     r18         ; answer++, bit_1 = 0
-sqrt32bitdone:
-    dec   r23           ; decrement loop count
-    brne  sqrt32loop    ; branch if not done
-    lsr   r20           ; root = answer / 2
-    ror   r19
-    ror   r18
+    clr     r20         ; bit = 0x8000
+    ldi     r21, 0x80
+6:  movw    r6, r18     ; t = answer | bit
+    or      r6, r20
+    or      r7, r21
+    mul     r6, r6      ; r9:r8:r27:r26 = t * t
+    movw    r26, r0
+    mul     r7, r7
+    movw    r8, r0
+    mul     r6, r7
+    add     r27, r0
+    adc     r8, r1
+    adc     r9, EH      ; EH: zero reg.
+    add     r27, r0
+    adc     r8, r1
+    adc     r9, EH
+    cp      r2, r26     ; input >= t * t ?
+    cpc     r3, r27
+    cpc     r4, r8
+    cpc     r5, r9
+    brcs    7f
+    movw    r18, r6     ; yes: answer = t
+7:  lsr     r21         ; bit >>= 1
+    ror     r20
+    brcc    6b          ; until the bit is shifted out
 .endm
 
 #endif	/* FFFT_ASM */

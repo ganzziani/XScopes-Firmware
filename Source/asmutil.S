@@ -27,8 +27,8 @@ set_pixel:
     ret
 
 ; Same as pixel(x,16), set_pixel(x,32), set_pixel(x,48)
-.global set_pixel_v3                ; void set_pixel_v3(uint8_t x);
-set_pixel_v3:
+.global vertical_dots               ; void vertical_dots(uint8_t x);
+vertical_dots:
     ldi     r30, lo8(Disp_send+3+256)   ; r31:r30 = &display_data[x + page 2]
     ldi     r31, hi8(Disp_send+3+256)
     add     r30, r24                ; r30 += x

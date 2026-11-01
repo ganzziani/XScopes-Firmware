@@ -65,23 +65,19 @@
 
 ;----------------------------------------------------------------------------;
 ; Constant Tables
-tbl_cos_sin:	; Table of {cos(x),sin(x)}, (0 <= x < pi, in FFT_N/2 steps)
-    .dc.w    32767, 0, 32757, 804, 32728, 1608, 32678, 2410, 32609, 3212, 32521, 4011, 32412, 4808, 32285, 5602
-    .dc.w    32137, 6393, 31971, 7179, 31785, 7962, 31580, 8739, 31356, 9512, 31113, 10278, 30852, 11039, 30571, 11793
-    .dc.w    30273, 12539, 29956, 13279, 29621, 14010, 29268, 14732, 28898, 15446, 28510, 16151, 28105, 16846, 27683, 17530
-    .dc.w    27245, 18204, 26790, 18868, 26319, 19519, 25832, 20159, 25329, 20787, 24811, 21403, 24279, 22005, 23731, 22594
-    .dc.w    23170, 23170, 22594, 23731, 22005, 24279, 21403, 24811, 20787, 25329, 20159, 25832, 19519, 26319, 18868, 26790
-    .dc.w    18204, 27245, 17530, 27683, 16846, 28105, 16151, 28510, 15446, 28898, 14732, 29268, 14010, 29621, 13279, 29956
-    .dc.w    12539, 30273, 11793, 30571, 11039, 30852, 10278, 31113, 9512, 31356, 8739, 31580, 7962, 31785, 7179, 31971
-    .dc.w    6393, 32137, 5602, 32285, 4808, 32412, 4011, 32521, 3212, 32609, 2410, 32678, 1608, 32728, 804, 32757
-    .dc.w    0, 32767, -804, 32757, -1608, 32728, -2410, 32678, -3212, 32609, -4011, 32521, -4808, 32412, -5602, 32285
-    .dc.w    -6393, 32137, -7179, 31971, -7962, 31785, -8739, 31580, -9512, 31356, -10278, 31113, -11039, 30852, -11793, 30571
-    .dc.w    -12539, 30273, -13279, 29956, -14010, 29621, -14732, 29268, -15446, 28898, -16151, 28510, -16846, 28105, -17530, 27683
-    .dc.w    -18204, 27245, -18868, 26790, -19519, 26319, -20159, 25832, -20787, 25329, -21403, 24811, -22005, 24279, -22594, 23731
-    .dc.w    -23170, 23170, -23731, 22594, -24279, 22005, -24811, 21403, -25329, 20787, -25832, 20159, -26319, 19519, -26790, 18868
-    .dc.w    -27245, 18204, -27683, 17530, -28105, 16846, -28510, 16151, -28898, 15446, -29268, 14732, -29621, 14010, -29956, 13279
-    .dc.w    -30273, 12539, -30571, 11793, -30852, 11039, -31113, 10278, -31356, 9512, -31580, 8739, -31785, 7962, -31971, 7179
-    .dc.w    -32137, 6393, -32285, 5602, -32412, 4808, -32521, 4011, -32609, 3212, -32678, 2410, -32728, 1608, -32757, 804
+tbl_sin:	; Table of 127*sin(x), (0 <= x < 3pi/2, in pi/(FFT_N/2) steps); cos(x) = tbl_sin[x+FFT_N/4]
+    .dc.b       0,    3,    6,    9,   12,   16,   19,   22,   25,   28,   31,   34,   37,   40,   43,   46
+    .dc.b      49,   51,   54,   57,   60,   63,   65,   68,   71,   73,   76,   78,   81,   83,   85,   88
+    .dc.b      90,   92,   94,   96,   98,  100,  102,  104,  106,  107,  109,  111,  112,  113,  115,  116
+    .dc.b     117,  118,  120,  121,  122,  122,  123,  124,  125,  125,  126,  126,  126,  127,  127,  127
+    .dc.b     127,  127,  127,  127,  126,  126,  126,  125,  125,  124,  123,  122,  122,  121,  120,  118
+    .dc.b     117,  116,  115,  113,  112,  111,  109,  107,  106,  104,  102,  100,   98,   96,   94,   92
+    .dc.b      90,   88,   85,   83,   81,   78,   76,   73,   71,   68,   65,   63,   60,   57,   54,   51
+    .dc.b      49,   46,   43,   40,   37,   34,   31,   28,   25,   22,   19,   16,   12,    9,    6,    3
+    .dc.b       0,   -3,   -6,   -9,  -12,  -16,  -19,  -22,  -25,  -28,  -31,  -34,  -37,  -40,  -43,  -46
+    .dc.b     -49,  -51,  -54,  -57,  -60,  -63,  -65,  -68,  -71,  -73,  -76,  -78,  -81,  -83,  -85,  -88
+    .dc.b     -90,  -92,  -94,  -96,  -98, -100, -102, -104, -106, -107, -109, -111, -112, -113, -115, -116
+    .dc.b    -117, -118, -120, -121, -122, -122, -123, -124, -125, -125, -126, -126, -126, -127, -127, -127
 
 tbl_bitrev:        ; tbl_bitrev[] = ...
     .dc.b      0, 128,  64, 192,  32, 160,  96, 224,  16, 144,  80, 208,  48, 176, 112, 240
@@ -105,19 +101,13 @@ tbl_bitrev:        ; tbl_bitrev[] = ...
 .global Sin                     ; Return 8bit sine value
 .func Sin
 Sin:
-    clr     r23
-    clc
-    rol     r24                 ; Calculate correct index
-    rol     r23                 ; (The right values are found every 4 bytes in the the tbl_cos_sin table)
-    rol     r24
-    rol     r23                 ; multiply by 4
-    mov     r22,r23
-    sbrc    r23, 1              ; angle >=128
-    subi    r22, 2              ; substract 128
-    ldiw    ZH,ZL, tbl_cos_sin+3
-    addw    ZH,ZL, r22,r24
+    mov     r22, r24
+    andi    r24, 0x7F           ; index = angle & 127
+    ldiw    ZH,ZL, tbl_sin
+    add     ZL, r24
+    adc     ZH, r1
     lpm     r24, z
-    sbrc    r23, 1              ; angle >=128
+    sbrc    r22, 7              ; angle >=128
     neg     r24                 ; return -sin(angle-128)
     ret
 .endfunc
@@ -140,10 +130,7 @@ fft_execute:
     ldiw    EH,EL, 1            ; E = 1;
     ldiw    XH,XL, FFT_N/2      ; X = FFT_N/2;
 1:  ldi     AL, 4               ; T12 = E; (angular speed)
-    mul     EL, AL              ;
-    movw    T12L, T0L           ;
-    mul     EH, AL              ;
-    add     T12H, T0L           ;/
+    movw    T12L, EL            ;/
     movw    T14L, EL            ; T14 = E;
     pushw   EH,EL
     movw    YL, ZL              ; Z = &array_bfly[0];
@@ -171,24 +158,29 @@ fft_execute:
     addw    CH,CL, DH,DL        ;
     stw    Z+, CH,CL            ;/
     movw    T0L, ZL
-    ldiw    ZH,ZL, tbl_cos_sin  ; C = cos(T10); D = sin(T10);
+    ldiw    ZH,ZL, tbl_sin      ; C = cos(T10); D = sin(T10);
     addw    ZH,ZL, T10H,T10L    ;
-    lpmw    CH,CL, Z+           ;
-    lpmw    DH,DL, Z+           ;/
+    lpm     DH, Z               ;
+    subiw   ZH,ZL, -(FFT_N/4)   ; cos(x) = sin(x+pi/2)
+    lpm     CH, Z               ;/
     movw    ZL, T0L
-    FMULS16 T4H,T4L,T2H,T2L, AH,AL, CH,CL    ; *Y++ = A * C + B * D;
-    FMULS16 T8H,T8L,T6H,T6L, BH,BL, DH,DL    ;
-    addd    T4H,T4L,T2H,T2L, T8H,T8L,T6H,T6L;
-    stw     Y+, T4H,T4L            ;/
-    FMULS16 T4H,T4L,T2H,T2L, BH,BL, CH,CL     ; *Y++ = B * C - A * D;
-    FMULS16 T8H,T8L,T6H,T6L, AH,AL, DH,DL     ;
-    subd    T4H,T4L,T2H,T2L, T8H,T8L,T6H,T6L;
+    FMULS16x8 T4H,T4L,T2H, AH,AL, CH    ; *Y++ = A * C + B * D;
+    FMULS16x8 T8H,T8L,T6H, BH,BL, DH    ;
+    add     T2H, T6H            ;
+    adc     T4L, T8L            ;
+    adc     T4H, T8H            ;
+    stw     Y+, T4H,T4L         ;/
+    FMULS16x8 T4H,T4L,T2H, BH,BL, CH    ; *Y++ = B * C - A * D;
+    FMULS16x8 T8H,T8L,T6H, AH,AL, DH    ;
+    sub     T2H, T6H            ;
+    sbc     T4L, T8L            ;
+    sbc     T4H, T8H            ;
     stw     Y+, T4H,T4L         ;/
     addw    T10H,T10L, T12H,T12L        ; T10 += T12; (next angle)
-#if FFT_N >= 128
-    sbrs    T10H, FFT_B - 7     ; while(T10 < pi)
+#if FFT_N >= 512
+    sbrs    T10H, FFT_B - 9     ; while(T10 < pi)
 #else
-    sbrs    T10L, FFT_B + 1
+    sbrs    T10L, FFT_B - 1
 #endif
     rjmp    3b                  ;/
     ldi     AL, 4               ; Y += X; Z += X; (skip split segment)
@@ -217,7 +209,7 @@ fft_execute:
     popw    T6H,T6L
     popw    T4H,T4L
     popw    T2H,T2L
-;    clr    r1
+;    clr    r1          ; r1 already is zero: the last multiply is "mul XH, AL" with XH = 0
     ret
 .endfunc
 
@@ -260,7 +252,13 @@ fft_output:
     FMULS16 T4H,T4L,T2H,T2L, BH,BL, BH,BL    ;T4:T2 = B * B;
     FMULS16 T8H,T8L,T6H,T6L, CH,CL, CH,CL    ;T8:T6 = C * C;
     addd    T4H,T4L,T2H,T2L, T8H,T8L,T6H,T6L;T4:T2 += T8:T6;
-    SQRT32                          ;B = sqrt(T4:T2);
+    sbic    0x0008,4                ; iqfft? (bit 4 in GPIO8)
+    rjmp    2f
+    lsl     T2L                     ; Real input has .i=0: T4:T2 *= 2
+    rol     T2H                     ; (same gain as the old r=i input, max 4*32512^2 < 2^32)
+    rol     T4L
+    rol     T4H
+2:  SQRT32                          ;B = sqrt(T4:T2);
     clr     r1
     sbis    0x0008,3            ; Use log? (bit 3 in GPIO8)
     rjmp    nolog               ; 2 cycles
@@ -301,10 +299,11 @@ doneshift:
 nolog:
     LSL     BL                  ; Condition output
     ROL     BH                  ; It seems that multiplying by four
+    BRCS    3f                  ; B >= 32768: clip
     LSL     BL                  ; gives a good result
     ROL     BH                  ;
     BRCC    gotit
-    ldi     BH, 255             ; clip if overflow
+3:  ldi     BH, 255             ; clip if overflow
 gotit:
     st Y+, BH           ; Only take high byte
 
