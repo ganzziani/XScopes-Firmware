@@ -43,14 +43,15 @@
  *  process begins. */
 const USB_Descriptor_Device_t PROGMEM XmegaScope_DeviceDescriptor = {
 	.Header                 = {.Size = sizeof(USB_Descriptor_Device_t), .Type = DTYPE_Device},
-	.USBSpecification       = VERSION_BCD(01.10),
+	.USBSpecification       = 0x0200,	// USB 2.0 (full speed): Windows asks for the MS OS descriptors only from 2.0 devices
 	.Class                  = USB_CSCP_VendorSpecificClass,
 	.SubClass               = USB_CSCP_NoDeviceSubclass,
 	.Protocol               = USB_CSCP_NoDeviceProtocol,
 	.Endpoint0Size          = USB_EP0SIZE,
 	.VendorID               = 0x16D0,
 	.ProductID              = 0x06F9,
-	.ReleaseNumber          = VERSION_BCD(01.01),	// Bumped so Windows re-reads the MS OS descriptors
+	.ReleaseNumber          = 0x0101,	// 01.01, bumped so Windows re-reads the MS OS descriptors. Not VERSION_BCD(01.01):
+	                                        // with 32-bit doubles its hundredths digit rounds down to 0x0100
 	.ManufacturerStrIndex   = 0x01,
 	.ProductStrIndex        = 0x02,
 	.SerialNumStrIndex      = USE_INTERNAL_SERIAL,

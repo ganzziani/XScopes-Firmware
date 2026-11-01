@@ -82,8 +82,8 @@ static inline void USB_handleGetDescriptor(USB_Request_Header_t* req) {
 		if (DescriptorSize > req->wLength) DescriptorSize=req->wLength;
 		USB_ep0_send_progmem(DescriptorPointer, DescriptorSize);
 	}
-	/* Error -> Stall endpoint */
-	//return false;
+	// Unknown descriptor, e.g. the DEVICE_QUALIFIER a host asks a USB 2.0 device for: STALL the data stage
+	else endpoints[0].in.CTRL |= USB_EP_STALL_bm;
 }
 
 static inline void USB_handleSetConfiguration(USB_Request_Header_t* req) {
@@ -150,6 +150,7 @@ ISR(USB_BUSEVENT_vect) {
 ISR(USB_TRNCOMPL_vect) {
     ONRED();
 	if (endpoints[0].out.STATUS & USB_EP_SETUP_bm) {	// Setup transaction complete
+		endpoints[0].in.CTRL &= ~USB_EP_STALL_bm;		// A new request ends the STALL of the previous one
 	    USB_Request_Header_t* req = (void *) ep0_buf_out;
 	    if ((req->bmRequestType & CONTROL_REQTYPE_TYPE) == REQTYPE_STANDARD) {
 		    switch (req->bRequest) {    // Check for standard requests
