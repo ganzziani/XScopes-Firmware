@@ -191,10 +191,14 @@ void Sniff(void) {
         USARTC0.CTRLC = databits;
                 
         USARTC0.CTRLB = 0x10;       // Enable RX
-        TCC1.CTRLA = 0x01;  // DIV1
         T.LOGIC.baud = (uint16_t)pgm_read_word_near(TCC1val+baud);
-        TCC1.PER = T.LOGIC.baud/4;   // Sample at 4 times the baud rate
-        TCC1.INTCTRLA = 0x03;           // Enable TCC1 interrupt, High Priority
+        TCC1.PER = T.LOGIC.baud;        // One bit period
+        TCC1.CCA = T.LOGIC.baud/2;      // Compare A: middle of the bit
+        PORTC.PIN3CTRL &= 0b11111000;   // TX: sense both edges (Apply() set rising)
+        EVSYS.CH2MUX = EVSYS_CHMUX_PORTC_PIN3_gc;   // CH2 is free outside the frequency counter
+        TCC1.CTRLD = TC_EVACT_RESTART_gc | TC_EVSEL_CH2_gc; // Every TX edge restarts the bit timer
+        TCC1.CTRLA = 0x01;  // DIV1
+        TCC1.INTCTRLB = 0x03;           // Enable TCC1 CCA interrupt, High Priority
     }
     else if(M.CHDdecode==spi) {
         uint8_t pin7ctrl=1;   // Sense rising edge
@@ -367,8 +371,9 @@ exitSniffer:
     clrbit(Misc,sacquired);
     USARTC0.CTRLA = 0x00;   // Disable receive interrupt
     USARTC0.CTRLB = 0x00;   // Disable UART RX
-    TCC1.INTCTRLA = 0x00;   // Disable timer interrupt
+    TCC1.INTCTRLB = 0x00;   // Disable timer interrupt
     TCC1.CTRLA = 0x00;      // Disable timer
+    TCC1.CTRLD = 0x00;      // No restart on event (TCC1 counts post trigger samples next)
     PORTC.INTCTRL = 0x00;   // Disable PORTC interrupts
     SPIC.CTRL = 0x00;       // Disable SPI
     PR.PRPC  = 0x7C;        // Stop: TWI, USART0, USART1, SPI, HIRES
@@ -571,24 +576,20 @@ ISR(PORTC_INT1_vect) {
 }
 
 // Bit banging to decode the TX pin:
-// The interrupt monitors the TX line at four times the baud rate,
-// when the start bit is sensed, the timer period is set to the baud rate
-// then all the incoming characters are processed inside the interrupt.
-// Before exiting, the timer is set to 4 times the baud rate again.
-ISR(TCC1_OVF_vect) {
+// TCC1 runs at the baud rate and every TX edge restarts it (event CH2),
+// so compare A (half a bit) lands in the middle of each bit.
+// The interrupt checks for a start bit, then the whole character is
+// processed inside the interrupt, resynchronizing on every edge.
+ISR(TCC1_CCA_vect) {
     uint8_t i, data=0, paritybit=0;
 
-    // Start Bit
+    // Start Bit: low in the middle of a bit
     if(testbit(VPORT2.IN, 3)) return;
-    TCC1.INTFLAGS = 0x01;   // Clear overflow flag
-    while(!testbit(TCC1.INTFLAGS,0));   // wait for next time slice
-    // Set actual baud rate
-    TCC1.PER = T.LOGIC.baud;
 
     // Data bits
     for(i=0; i<T.LOGIC.databits; i++) {
-        TCC1.INTFLAGS = 0x01;   // Clear overflow flag
-        while(!testbit(TCC1.INTFLAGS,0));   // wait for next time bit
+        TCC1.INTFLAGS = TC1_CCAIF_bm;   // Clear compare flag
+        while(!testbit(TCC1.INTFLAGS,TC1_CCAIF_bp));   // wait for next time bit
         data=data>>1;
         if(testbit(VPORT2.IN, 3)) {
             data|=0x80;
@@ -598,8 +599,8 @@ ISR(TCC1_OVF_vect) {
     for(i=T.LOGIC.databits; i<8; i++) data=data>>1;
     // Check Parity
     if(testbit(Sniffer,parmode)) {
-        TCC1.INTFLAGS = 0x01;   // Clear overflow flag
-        while(!testbit(TCC1.INTFLAGS,0));   // wait for next time bit
+        TCC1.INTFLAGS = TC1_CCAIF_bm;   // Clear compare flag
+        while(!testbit(TCC1.INTFLAGS,TC1_CCAIF_bp));   // wait for next time bit
         if(testbit(Sniffer,parity)) {  // Odd Parity
             if( (testbit(paritybit,0) && testbit(VPORT2.IN, 3)) ||
                 (!testbit(paritybit,0) && !testbit(VPORT2.IN, 3)))
@@ -613,15 +614,15 @@ ISR(TCC1_OVF_vect) {
     }
 
     // First Stop bit
-    TCC1.INTFLAGS = 0x01;   // Clear overflow flag
-    while(!testbit(TCC1.INTFLAGS,0));   // wait for next time bit
+    TCC1.INTFLAGS = TC1_CCAIF_bm;   // Clear compare flag
+    while(!testbit(TCC1.INTFLAGS,TC1_CCAIF_bp));   // wait for next time bit
     if(!testbit(VPORT2.IN, 3))
         goto exituart;       // stop bit error
 
     // Second Stop bit
     if(testbit(Sniffer,stopbit)) {
-        TCC1.INTFLAGS = 0x01;   // Clear overflow flag
-        while(!testbit(TCC1.INTFLAGS,0));   // wait for next time bit
+        TCC1.INTFLAGS = TC1_CCAIF_bm;   // Clear compare flag
+        while(!testbit(TCC1.INTFLAGS,TC1_CCAIF_bp));   // wait for next time bit
         if(!testbit(VPORT2.IN, 3))
             goto exituart;  // stop bit error
     }
@@ -631,6 +632,5 @@ ISR(TCC1_OVF_vect) {
     if(!testbit(MStatus, stop)) setbit(DMA.CH1.CTRLA,4);    // Transfer request
 
 exituart:
-    TCC1.PER = T.LOGIC.baud/4;
-    TCC1.INTFLAGS = 0x01;   // Clear overflow flag
+    TCC1.INTFLAGS = TC1_CCAIF_bm;   // Clear compare flag
 }
