@@ -50,8 +50,7 @@ const USB_Descriptor_Device_t PROGMEM XmegaScope_DeviceDescriptor = {
 	.Endpoint0Size          = USB_EP0SIZE,
 	.VendorID               = 0x16D0,
 	.ProductID              = 0x06F9,
-	.ReleaseNumber          = 0x0101,	// 01.01, bumped so Windows re-reads the MS OS descriptors. Not VERSION_BCD(01.01):
-	                                        // with 32-bit doubles its hundredths digit rounds down to 0x0100
+	.ReleaseNumber          = 0x0101,	// 01.01, bumped so Windows re-reads the MS OS descriptors
 	.ManufacturerStrIndex   = 0x01,
 	.ProductStrIndex        = 0x02,
 	.SerialNumStrIndex      = USE_INTERNAL_SERIAL,

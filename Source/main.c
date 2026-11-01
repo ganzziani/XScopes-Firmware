@@ -18,7 +18,7 @@
     Events:
 	    CH0 TCE0 overflow used for ADC
 	    CH1 ADCA CH0 conversion complete
-        CH2 EXT Trigger or logic pin for freq. measuring
+        CH2 EXT Trigger or logic pin for freq. measuring / PC3 edges for UART sniffer
         CH3 TCD1 overflow used for DAC
         CH4 TCC0 overflow used for freq. measuring
         CH5 TCC1 overflow used for freq. measuring
@@ -46,7 +46,7 @@
     Interrupt Levels:
         PORTC_INT1      High        SPI sniffer
         PORTC INT0      High        I2C sniffer
-        TCC1            High        UART sniffer
+        TCC1 CCA        High        UART sniffer
         USARTE0 UDRE    High        Serial port ready to send
         TCE0:           Medium      Slow Sampling
         USARTE0 RXC     Medium      Serial port RX

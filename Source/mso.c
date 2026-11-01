@@ -965,13 +965,13 @@ void MSO(void) {
             uint8_t tempmfft, tempsrate, tempch1gain,tempch2gain;
             tempch1gain=M.CH1gain; tempch2gain=M.CH2gain;
             tempsrate= Srate;
-			tempmfft = MFFT;
+			tempmfft = MFFT;                                    // Remember uselog state
 			clrbit(MFFT,uselog);
             clrbit(CH1ctrl,chmath);
             clrbit(CH2ctrl,chmath);
             T.SCOPE.CH1.f=fft_stuff(T.SCOPE.DC.CH1data);
             T.SCOPE.CH2.f=fft_stuff(T.SCOPE.DC.CH2data);
-			MFFT=tempmfft;
+            if(testbit(tempmfft,uselog)) setbit(MFFT,uselog);   // Restore uselog state
             uint8_t MaxGain=5;
             if(MFFT<0x20) { // Meter Mode
                 if(testbit(MStatus, vp_p) || testbit(MStatus, vdc)) MaxGain=3; // Limit maximum gain on meter mode when measuring V
