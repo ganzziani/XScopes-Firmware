@@ -108,11 +108,9 @@ void printhex3x6(uint8_t n) {
     temp = n&0x0F; putchar3x6(NibbleToChar(temp));
 }
 
-extern const uint16_t milivolts[];
-
 // Print Voltage, multiply by 10 if using the x10 probe
 void printV(int16_t Data, uint8_t gain, uint8_t CHCtrl) {
-    int32_t Data32 = (int32_t)Data*milivolts[gain];
+    int32_t Data32 = (int32_t)Data*pgm_read_word_near(milivolts+gain);
     if(testbit(CHCtrl,chx10)) Data32*=10;
     printF(u8CursorX,u8CursorY,Data32/8);
 }    
