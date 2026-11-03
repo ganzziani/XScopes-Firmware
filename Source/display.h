@@ -2,6 +2,7 @@
 #define DISPLAY_H
 
 #include <stdint.h>
+#include <avr/pgmspace.h>
 #include "hardware.h"
 
 typedef struct {
@@ -11,6 +12,7 @@ typedef struct {
 
 extern Disp_data Disp_send;
 extern uint8_t u8CursorX, u8CursorY;
+extern const uint16_t milivolts[7] PROGMEM;    // mV per pixel * 100000 / 32, indexed by gain
 
 #define lcd_goto(x,y) do { u8CursorX=(x); u8CursorY=(y); } while(0)
 

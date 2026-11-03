@@ -66,7 +66,8 @@ rate SCOPE SETTING  Min. F      Max.F     S/s  Oversample ADCCLK  PRESCALE TCE0 
 
 // milivolts or volts per pixels * 100000 / 32
 // Range                      5.12V 2.56V 1.28V 0.64V  320mV  160mV   80mV
-const int16_t milivolts[7] = { 1000,  500,  250,  125, 62500, 31250, 15625 };
+// In PROGMEM: this table is 14 bytes, which used to be the whole .data section (SRAM)
+const uint16_t milivolts[7] PROGMEM = { 1000,  500,  250,  125, 62500, 31250, 15625 };
 
 // Maximum Frequency * 100000
 const uint32_t freqval[22] PROGMEM = {
@@ -2096,7 +2097,7 @@ checknext:
                         uint8_t mtlevel;
                         mtlevel=0x80-M.Tlevel;
                         if(mtlevel>=128) mtlevel=-mtlevel;
-                        printF(0,TEXT_LAST_LINE,((int32_t)mtlevel)*((int32_t)milivolts[tempGain]*6400/(pgm_read_word_near(timeval+Srate))));
+                        printF(0,TEXT_LAST_LINE,((int32_t)mtlevel)*((int32_t)pgm_read_word_near(milivolts+tempGain)*6400/(pgm_read_word_near(timeval+Srate))));
                         print3x6(textV_Unit);  // Display V or mV
                         putchar3x6('/');
                         if(Srate<=6) putchar3x6(0x17);    // micro
@@ -2711,7 +2712,7 @@ static inline void ShowCursorH(void) {
             HcursorB=CH->min;
 		}
         if(testbit(MFFT,xymode)) {
-            dispHA=128-(HcursorA>>1);
+            dispHA=DISPLAY_MAX_X-(HcursorA>>1);
 			dispHB=(HcursorB-M.HPos)>>1;
             for(uint8_t i=1; i<=(DISPLAY_MAX_X-1); i+=4) {
                 if(i<=DISPLAY_MAX_Y) set_pixel(dispHA,i);				// Vertical Line for HcursorA
