@@ -490,9 +490,13 @@ void PowerDown(void) {
 	#ifdef XMINIPORTABLE    // Portable version just powers off
 	while(1);
 	#else
+    // Turn off watchdog before going to sleep (otherwise, it will reset the micro)
+    CCPWrite(&WDT.CTRL, WDT_PER_8KCLK_gc | WDT_CEN_bm);
     SLEEP.CTRL = SLEEP_SMODE_PDOWN_gc | SLEEP_SEN_bm;
     asm("sleep");
     SLEEP.CTRL = 0x00;
+    // Wake up (a key press pulls a PORTA pin low), enable the watchdog again
+    CCPWrite(&WDT.CTRL, WDT_PER_8KCLK_gc | WDT_ENABLE_bm | WDT_CEN_bm);
     GLCD_LcdInit();
 	setbit(VPORT1.OUT,0);   // Power up
 	Buttons=0;
