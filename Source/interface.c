@@ -185,6 +185,8 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
                 index=read();   // Read index
 		        value=read();   // Read value
             }
+            // Check index range: index selects GPIO0..11 and then M[0..sizeof(M)-1];
+            if(index >= 12 + sizeof(NVMVAR)) break;
             // Write to the corresponding register
             if(index==0 && Srate>10) clrbit(MStatus, triggered);    // prevents bad wave when changing from 20 to 10ms/div
             if(index<=5 || index==35 || index==38 || index==12 || index==13 ||
