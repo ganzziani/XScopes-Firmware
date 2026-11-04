@@ -133,16 +133,19 @@ static inline void SendBMP(void) {
 
 // Put a character in the transmit queue
 void send (uint8_t d) {
-    uint8_t i = txfifo.idx_w;
-    // Check if buffer is full, if so wait...
-    while(txfifo.count >= sizeof(txfifo.buff));
+    uint8_t i;
+    for(;;) {   // Wait for room in the buffer, letting the DRE interrupt drain the queue
+        cli();  // Room check and txfifo updates need to occur together with updates disabled
+        i = txfifo.idx_w;
+        if(txfifo.count < sizeof(txfifo.buff)) break;
+        sei();
+    }
     txfifo.buff[i++] = d;
-    cli();
+    if(i >= sizeof(txfifo.buff)) i = 0;
+    txfifo.idx_w = i;
     txfifo.count++;
     USARTE0.CTRLA = USART_RXCINTLVL0_bm | USART_DREINTLVL_gm;  // Enable DRE high level interrupt
     sei();
-    if(i >= sizeof(txfifo.buff)) i = 0;
-    txfifo.idx_w = i;
 }
 
 // UART UDRE interrupt

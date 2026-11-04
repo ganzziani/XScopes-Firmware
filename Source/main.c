@@ -173,7 +173,9 @@ int main(void) {
     USARTE0.BAUDCTRLB = 0xA4;   // ==> 115211 bps (~115.2kbps)
     USARTE0.CTRLC     = 0x03;   // Async, No Parity, 1 stop bit, 8 data bits
     USARTE0.CTRLB     = 0x18;   // Enable RX and TX
-	USARTE0.CTRLA     = 0x20;   // Enable RX interrupt
+    USARTE0.CTRLA     = USART_RXCINTLVL_LO_gc;  // Enable RX interrupt, low level:
+                        // send() streams replies through the DRE ISR (high), so a long
+                        // reply must stay preemptible by the medium level acquisition ISR
 
     // Event System
     EVSYS.CH0MUX    = 0xE0;     // Event CH0 = TCE0 overflow used for ADC

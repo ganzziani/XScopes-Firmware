@@ -110,9 +110,15 @@ void printhex3x6(uint8_t n) {
 
 // Print Voltage, multiply by 10 if using the x10 probe
 void printV(int16_t Data, uint8_t gain, uint8_t CHCtrl) {
-    int32_t Data32 = (int32_t)Data*pgm_read_word_near(milivolts+gain);
-    if(testbit(CHCtrl,chx10)) Data32*=10;
-    printF(u8CursorX,u8CursorY,Data32/8);
+    int32_t Data32 = (int32_t)Data*pgm_read_word_near(milivolts+gain)/8;
+    if(testbit(CHCtrl,chx10)) {
+        // Saturate to +- 0x8000000 to avoid overflow,
+        // anything larger is past printF's four digits anyway
+        if(Data32 > 134217727L || Data32 < -134217727L)
+            Data32 = (Data32 < 0) ? -134217728L : 134217728L;
+        Data32*=10;
+    }
+    printF(u8CursorX,u8CursorY,Data32);
 }    
 
 // Print Fixed point Number with 5 digits
