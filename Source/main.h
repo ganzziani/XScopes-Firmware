@@ -156,7 +156,6 @@ void Restore(void);
 void SaveEE(void);          // Save settings to EEPROM
 void CalibrateOffset(void);
 uint8_t ReadCalibrationByte(uint8_t location);	// Read out calibration byte
-void delay_ms(uint8_t n);
 
 extern uint8_t EEMEM EESleepTime;     // Sleep timeout in minutes
 
@@ -206,21 +205,23 @@ typedef union {
         int8_t AWGTemp2[BUFFER_AWG];
     } AWGDATA;
     struct {
-        union {
-            struct {
-                uint8_t RX[BUFFER_SERIAL];
-                uint8_t TX[BUFFER_SERIAL];
-            } Serial;
-            struct {
-                uint8_t decoded[BUFFER_I2C];
-                uint8_t addr_ack[BUFFER_I2C/4+1];
-            } I2C;
-            struct {
-                uint8_t decoded[BUFFER_SERIAL*2];
-            };
-        } data;
-        volatile uint16_t indrx;    // RX index
-        volatile uint16_t indtx;    // TX index
+        struct {
+            union {
+                struct {
+                    uint8_t RX[BUFFER_SERIAL];
+                    uint8_t TX[BUFFER_SERIAL];
+                } Serial;
+                struct {
+                    uint8_t decoded[BUFFER_I2C];
+                    uint8_t addr_ack[BUFFER_I2C/4+1];
+                } I2C;
+                struct {
+                    uint8_t decoded[BUFFER_SERIAL*2];
+                };
+            } data;
+            volatile uint16_t indrx;    // RX index
+            volatile uint16_t indtx;    // TX index
+        };
         uint8_t databits;           // UART Data bits
         uint8_t *addr_ack_ptr;      // pointer to address or data (packed bits)
         uint8_t *data_ptr;
@@ -231,6 +232,7 @@ typedef union {
 
 // Variables that need to be stored in NVM
 
+// Currently, only these are implemented: (0: SPI; 1: I2C; 2: RS232)
 enum protocols { spi, i2c, rs232, irda, onewire, midi };
 
 typedef struct {

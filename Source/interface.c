@@ -187,23 +187,24 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
             }
             // Check index range: index selects GPIO0..11 and then M[0..sizeof(M)-1];
             if(index >= 12 + sizeof(NVMVAR)) break;
-            // Write to the corresponding register
+            // Write the byte first, then raise the request bits: they are requests, not
+            // settings, so a write to MStatus (index 11) cannot throw them away (CR-037).
+            // 'pending' carries the requests that were already queued across that write; for
+            // any other index nothing cleared them, so the OR below is a no-op.
+            uint8_t pending = MStatus & (_BV(update)|_BV(updatemso)|_BV(updateawg));
+            if(index<12) p=(uint8_t *)index;	    // Accessing GPIO
+            else p=(uint8_t *)(&M) + (index-12);  // Accessing M (leaves 'index' for the tests)
+            *p=value;		                // Write data
+            MStatus |= pending;                 // requests queued before this write survive it
             if(index==0 && Srate>10) clrbit(MStatus, triggered);    // prevents bad wave when changing from 20 to 10ms/div
             if(index<=5 || index==35 || index==38 || index==12 || index==13 ||
             (index>=24 && index<=28))  setbit(MStatus, update);      // Changing trigger
-            if(index<=13) {
-                T.SCOPE.MeterFreq = 0;			// Prevent sending outdated data
+            T.SCOPE.MeterFreq = 0;              // Any write invalidates the cached meter reading
+            if(index<=13 || index==28) {        // Only settings that need Apply()
                 setbit(MStatus, updatemso);		// Settings are changing
             }
             if(index>=36) setbit(MStatus, updateawg);
             if(index==8) T.SCOPE.adjusting=0;   // Mode change: cancel auto setup (as RestorefromMeter does)
-            if(index<12) p=(uint8_t *)index;	    // Accessing GPIO
-            else {
-                index-=12;
-                p=(uint8_t *)(&M);			// Accessing M
-                p+=index;
-            }
-            *p=value;		                // Write data
         break;
 		case 'c':	// Set Frequency (4 bytes)
 			p=(uint8_t *)&M.AWGdesiredF;
@@ -278,6 +279,32 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
             while(n--) send(*p++);
             n = 0;
         break;
+        // Bench diagnostic, test-fixture build only: read EEPROM, the counterpart of
+        // 'r' for the non-volatile side (reference waveforms, calibration tables,
+        // stored settings). Read-only by design.
+        //
+        //   'R'  addr_lo  addr_hi  count   ->  count raw bytes of EEPROM (1..64)
+        //
+        // Unlike 'r' this one works over both transports: the parameters come from the
+        // setup packet over USB and the reply is the ep0 buffer, so nothing waits on
+        // USARTE0 (the CR-039 trap). 'r' reads RAM, 'R' reads EEPROM.
+        case 'R':
+        {
+            uint16_t ea;
+            if(usb) {
+                ea = req->wIndex;           // EEPROM offset
+                n  = lobyte(req->wValue);   // byte count
+            }
+            else {
+                i  = read();                            // low address byte
+                ea = (uint16_t)(((uint16_t)read() << 8) | i);  // high address byte
+                n  = read();                            // byte count
+            }
+            if(n > sizeof(ep0_buf_in)) n = sizeof(ep0_buf_in);
+            for(i=0; i<n; i++)
+                ep0_buf_in[i] = eeprom_read_byte((const uint8_t *)(uint16_t)(ea+i));
+        }
+        break;
 #endif
         case 'l':
             for(uint16_t i=0; i<1280; i++) {
@@ -304,13 +331,17 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
         case 'w':   // Send waveform stored in EE
             do { send(eeprom_read_byte(EEwave+i)); } while(++i);
         break;
-        case 'x':   // Read data and store in AWG buffer
+        case 'x':   // Read data and store in AWG buffer over the serial port
+            if(usb) break;
             send('G');   // confirmation
             p=AWGBuffer;
             do { *p++ = read(); } while(++i);
             send('T');   // confirmation
         break;
-        case 'C': SendBMP(); break; // Send BMP
+        case 'C':    // Send BMP over the serial port
+            if(usb) break;
+            SendBMP();
+        break;
 		case 0xBB: // disconnect from USB, jump to bootloader
             // USB_ep0_wait_for_complete
 			USB_ep0_in_start(0);

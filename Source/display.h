@@ -28,6 +28,7 @@ void printF(uint8_t x, uint8_t y, int32_t Data);
 void tiny_printp(uint8_t x, uint8_t y, const char *ptr);
 void LcdInstructionWrite (unsigned char);
 
+void delay_ms(uint8_t n);
 void GLCD_LcdInit(void);
 void GLCD_setting(void);
 void GLCD_LcdOff(void);

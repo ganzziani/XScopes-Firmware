@@ -729,7 +729,7 @@ void MSO(void) {
                         ox=ox>>1;
                     }
                     if(testbit(Display, line)) {
-                        if(i==0) continue;
+                        if(i==0) continue;      // no previous point
                         if(testbit(CH1ctrl,chon)) set_line(nx, ny1, ox, oy1);
                         if(testbit(CH2ctrl,chon)) set_line(nx, ny2, ox, oy2);
                     }
@@ -738,8 +738,7 @@ void MSO(void) {
                         if(testbit(CH2ctrl,chon)) set_pixel(nx, ny2);
                     }
                     if(Srate<11 && i>=127) break;
-                    j++;
-                } while(++i);
+                } while(++i, ++j);      // j advances on the i==0 pass too (CR-021)
             }            
             if(Srate<11 || testbit(Mcursors,roll)) {
                 uint8_t k=0, prev=0;
@@ -2556,7 +2555,8 @@ cancelvdc:
         // TCC1:Lo16 TCE0:Hi16 TCC0:Timer
         // Event CH2:Input, Event CH4:TCC0 overflow, Event CH5:TCC1 overflow
         uint32_t freqv;
-		if(!testbit(MStatus,vdc) || TCC1.CTRLB==0) { // Reset counters
+        // Check if TCC1 is already configured with TC_CLKSEL_EVCH2_gc
+		if(!testbit(MStatus,vdc) || TCC1.CTRLA!=TC_CLKSEL_EVCH2_gc) { // Reset counters: not running
             second=minute=hour=0;           // Reset time
             cli();
             TCC0.CTRLA = 0;                 // Stop time keeper
