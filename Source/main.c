@@ -477,6 +477,8 @@ ISR(RTC_OVF_vect) {
 
 // RTC Compare, Menu timeout
 ISR(RTC_COMP_vect) {
+    // Fast timebases will clear the menu onthe next frame
+    // Slow timebases will eventually clear the meenu (one column at a time)
     if(!Buttons) Menu=Mdefault; // Go to default menu if no key is being pressed
 }
 

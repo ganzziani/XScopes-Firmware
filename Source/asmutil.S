@@ -75,7 +75,6 @@ set_line:
     ; r22 = y1
     ; r21 = loop counter
     ; r20 = dxabs
-    ; r19 = stepy hi
     ; r18 = dyabs
 
     ; Calculate initial address: buffer[((y<<4)&0xFF80) + x]
@@ -112,12 +111,10 @@ set_line:
     ; Initialize y vars
     ;sub     r18, r22               ; dy calculated previously
     ldi     r26, 1                  ; stepy lo = 1
-    ldi     r19, 0                  ; stepy hi = 0
     tst     r18                     ; test dy for zero or negative
     brpl    .+6                     ; branch if positive
     neg     r18                     ; dyabs = -dy
     ldi     r26, -1                 ; stepy lo = -1
-    ldi     r19, -1                 ; stepy hi = -1
 
     cp      r20, r18                ; if (dxabs >= dyabs)
     brlo    .Vertical_line
