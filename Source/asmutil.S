@@ -112,7 +112,7 @@ set_line:
     ;sub     r18, r22               ; dy calculated previously
     ldi     r26, 1                  ; stepy lo = 1
     tst     r18                     ; test dy for zero or negative
-    brpl    .+6                     ; branch if positive
+    brpl    .+4                     ; branch if positive (skip neg + ldi)
     neg     r18                     ; dyabs = -dy
     ldi     r26, -1                 ; stepy lo = -1
 

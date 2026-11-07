@@ -6,6 +6,7 @@
 #include "main.h"
 #include "mso.h"
 #include "utils.h"
+#include "bitmaps.h"
 
 Disp_data Disp_send;
 uint8_t   u8CursorX, u8CursorY;
@@ -40,6 +41,8 @@ void GLCD_setting(void) {
 // Sprites, each byte pair represents next pixel relative position
 void sprite(uint8_t x, uint8_t y, const int8_t *ptr) {
     int8_t a=0, b=0;
+    if(ptr!=TrigUp && y>DISPLAY_MAX_Y-3) return;                // reaches down
+    if(ptr!=TrigDown && (y<3 || y>DISPLAY_MAX_Y)) return;       // reaches up
     do {
         set_pixel(x+a,y+b);
         a=pgm_read_byte(ptr++);  // Get next x

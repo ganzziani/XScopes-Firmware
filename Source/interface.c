@@ -69,66 +69,43 @@ static inline uint8_t transpose(uint8_t x, uint8_t y) {
     return data;
 }
 
-// Send data from LCD to PC via RS-232 using the XMODEM protocol
+// The screenshot as a byte stream: the 62 byte BMP header, then the display
+// transposed into 64 rows of 16 bytes, bottom row first (BMP order). Shared by
+// the XMODEM transfer below and the USB block read in ProcessCommand('C').
+#define BMP_SIZE    (62 + 1024)
+static uint8_t bmp_byte(uint16_t o) {
+    if(o < 62) return pgm_read_byte_near(BMP + o);
+    o -= 62;
+    return transpose((uint8_t)((o & 15) * 8), (uint8_t)(63 - (o >> 4)));
+}
+
+// Send data from LCD to PC via RS-232 using the XMODEM protocol: 128 byte blocks,
+// the last one padded with 0x1A (end of file).
 // The CRC module's CRC-16 is CRC-16/XMODEM (poly 0x1021, MSB first)
 static inline void SendBMP(void) {
-    uint8_t rx,data,Packet=1, n=0,i,j;
-    CRC.CTRL = CRC_RESET_RESET0_gc;     // CHECKSUM = 0
-    CRC.CTRL = CRC_SOURCE_IO_gc;        // CRC on data written to DATAIN
-
-    // First Block
-    send(SOH);
-    send(1);		// Send Packet number
-    send(254);		// Send Packet number 1's complement
-    // Send BMP Header
-    for(i=0; i<62; i++) {
-        n++;
-        data = pgm_read_byte_near(BMP+i);
-        CRC.DATAIN = data;
-        send(data);
-    }
-
-    // Send LCD data, 64 lines
-    for(i=63; i!=255; i--) {
-        // Each LCD line consists of 16 bytes
-        for(j=0; j<16; j++) {
-            data=transpose(j*8,i);
+    uint8_t data, Packet=1;
+    uint16_t o=0;
+    for(;;) {
+        send(SOH);
+        send(Packet);           // Send Packet number
+        send(255-Packet);       // Send Packet number 1's complement
+        CRC.CTRL = CRC_RESET_RESET0_gc;     // CHECKSUM = 0
+        CRC.CTRL = CRC_SOURCE_IO_gc;        // CRC on data written to DATAIN
+        for(uint8_t k=0; k<128; k++, o++) {
+            data = (o < BMP_SIZE) ? bmp_byte(o) : 0x1A;
             CRC.DATAIN = data;
             send(data);
-            n++;
-            if(n==128)  {   // end of 128byte block
-                n=0;
-                send(CRC.CHECKSUM1);
-                send(CRC.CHECKSUM0);
-                // Wait for ACK
-                rx = read();
-                if(rx!=ACK) return; // Error -> cancel transmission
-                Packet++;
-                send(SOH);
-                send(Packet);		// Send Packet number
-                send(255-Packet);	// Send Packet number 1's complement
-                CRC.CTRL = CRC_RESET_RESET0_gc;
-                CRC.CTRL = CRC_SOURCE_IO_gc;
-            }
         }
+        send(CRC.CHECKSUM1);
+        send(CRC.CHECKSUM0);
+        if(read()!=ACK) return; // Error -> cancel transmission
+        if(o >= BMP_SIZE) break;
+        Packet++;
     }
-
-    // End of last block
-    for(; n<128; n++) { // send remainder of block
-        data= 0x1A;     // pad with 0x1A which marks the end of file
-        CRC.DATAIN = data;
-        send(data);
-    }
-    send(CRC.CHECKSUM1);
-    send(CRC.CHECKSUM0);
-    rx = read();
-    if(rx!=ACK) return;
     send(EOT);
-    rx = read();
-    if(rx!=NAK) return;
+    if(read()!=NAK) return;
     send(EOT);
-    rx = read();
-    if(rx!=ACK) return;
+    if(read()!=ACK) return;
 }
 
 // Put a character in the transmit queue
@@ -170,6 +147,57 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
     const USB_Request_Header_t* req = (void *) ep0_buf_out;
     RTC.CNT=0;  // Clear screen saver timer    
     OFFGRN();   // In case the LED was on
+    // Commands that read or send on USARTE0 run for the serial port only: over USB they
+    // would block the control request on the UART (CR-039), and with autosend on that can
+    // starve the main loop into a watchdog reset (CR-045). Their replies go to the UART
+    // anyway, so a USB host has no use for them (it reads SCOPE_DATA from bulk endpoint 1).
+    if(!usb) switch(Command) {
+#ifdef TESTFIXTURE
+        // Bench diagnostic, test-fixture build only: read SRAM so the fixture can
+        // check what a command actually wrote instead of inferring it from the
+        // analog output - e.g. whether the 'x' upload is in AWGBuffer, and for how
+        // long it stays there.
+        //
+        //   'r'  addr_lo  addr_hi  count   ->  count raw bytes of data space
+        //
+        // Read-only by design (the fixture must not be able to write DUT memory
+        // this way), and UART-only like the rest of this switch.
+        case 'r':
+            i = read();                 // low address byte
+            n = read();                 // high address byte
+            p = (uint8_t *)((uint16_t)((n << 8) | i));
+            n = read();                 // byte count, 0 sends nothing
+            while(n--) send(*p++);
+            n = 0;
+        break;
+#endif
+        case 'l':   // Send the sniffer's decoded data
+            for(uint16_t i=0; i<1280; i++) send(T.LOGIC.data.decoded[i]);
+        break;
+        case 's':   // Send SCOPE_DATA: CH1, CH2, CHD, frame, index
+            p=(uint8_t *)T.SCOPE.DC.CH1data;
+            for(uint16_t i=0; i<sizeof(SCOPE_DATA); i++) send(*p++);
+        break;
+        case 'w':   // Send waveform stored in EE
+            do { send(eeprom_read_byte(EEwave+i)); } while(++i);
+        break;
+        case 'x':   // Read data and store in AWG buffer
+            send('G');   // confirmation
+            p=AWGBuffer;
+            do { *p++ = read(); } while(++i);
+            send('T');   // confirmation
+        break;
+        case 'C':   // Send BMP, XMODEM
+            SendBMP();
+        break;
+    }
+    else if(Command=='C') {
+        // Over USB the same BMP stream is read in 64 byte blocks, wIndex = block number
+        // (0..16; the last one is 62 bytes), answered from ep0_buf_in at once
+        uint16_t o = req->wIndex * 64;
+        for(; i<64 && o<BMP_SIZE; i++, o++) ep0_buf_in[i] = bmp_byte(o);
+        return i;
+    }
     switch(Command) {
         case 'a':   // Send firmware version
             p = (uint8_t *)(VERSION+3);
@@ -260,24 +288,23 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
             setbit(MStatus, updateawg);     // Generate wave                       
         break;
 #ifdef TESTFIXTURE
-        // Bench diagnostic, test-fixture build only: read SRAM so the fixture can
-        // check what a command actually wrote instead of inferring it from the
-        // analog output - e.g. whether the 'x' upload is in AWGBuffer, and for how
-        // long it stays there.
+        // Test-fixture build only: simulated key press, so the fixture can walk the
+        // menus and every other user interaction. 'b' cannot do it: index 12+ maps
+        // to M, so GPIORC..F (Misc, Index, Menu, Buttons) are out of its reach.
         //
-        //   'r'  addr_lo  addr_hi  count   ->  count raw bytes of data space
+        //   'K'  keys   ->  Misc, Index, Menu, Buttons (GPIORC..F, after the press)
         //
-        // Read-only by design (the fixture must not be able to write DUT memory
-        // this way), and UART-only: read() waits on USARTE0, so taking this over
-        // USB would stall the control endpoint (CR-039).
-        case 'r':
-            if(usb) break;
-            i = read();                 // low address byte
-            n = read();                 // high address byte
-            p = (uint8_t *)((uint16_t)((n << 8) | i));
-            n = read();                 // byte count, 0 sends nothing
-            while(n--) send(*p++);
-            n = 0;
+        // keys = the PORTA pins held down, as on the board: bit 1 MENU, bit 2,
+        // bit 3 K2, bit 4 (bits 2 and 4 are K1/K3, swapped by Display.flip). The
+        // pattern goes through KeyInput(), the key ISR's own decode, so the press
+        // raises userinput and update exactly like a debounced key. 0 = release
+        // (as the ISR sees it on key up). Bit 7 set = only report the four
+        // registers. Over USB: wValue = keys.
+        case 'K':
+            index = usb ? lobyte(req->wValue) : read();
+            if(!(index & 0x80)) KeyInput((uint8_t)(~index & 0x1E));
+            p=(uint8_t *)&Misc; for(; i<4; i++) ep0_buf_in[i]=*p++;   // GPIORC..F
+            n=4;
         break;
         // Bench diagnostic, test-fixture build only: read EEPROM, the counterpart of
         // 'r' for the non-volatile side (reference waveforms, calibration tables,
@@ -306,11 +333,6 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
         }
         break;
 #endif
-        case 'l':
-            for(uint16_t i=0; i<1280; i++) {
-                send(T.LOGIC.data.decoded[i]);
-            }                
-        break;
         case 'm':   // Send METER measurement
             p = (uint8_t *)(&T.SCOPE.MeterFreq);
             for(uint8_t i=0; i<4; i++) ep0_buf_in[i]=*p++;
@@ -318,29 +340,10 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
         break;            
         case 'p': clrbit(Misc,autosend); break;    // Do not automatically send data to UART
         case 'q': setbit(Misc,autosend); break;    // Automatically send data to UART
-        case 's':
-            for(uint16_t i=0; i<768; i++) {
-                send(T.SCOPE.DC.CH1data[i]);
-            }
-        break;
         case 'u':   // Send settings to PC
             p=(uint8_t *)0;  for(; i<12; i++) ep0_buf_in[i]=*p++;   // GPIO
             p=(uint8_t *)&M; for(; i<44; i++) ep0_buf_in[i]=*p++;   // M
             n=44;
-        break;
-        case 'w':   // Send waveform stored in EE
-            do { send(eeprom_read_byte(EEwave+i)); } while(++i);
-        break;
-        case 'x':   // Read data and store in AWG buffer over the serial port
-            if(usb) break;
-            send('G');   // confirmation
-            p=AWGBuffer;
-            do { *p++ = read(); } while(++i);
-            send('T');   // confirmation
-        break;
-        case 'C':    // Send BMP over the serial port
-            if(usb) break;
-            SendBMP();
         break;
 		case 0xBB: // disconnect from USB, jump to bootloader
             // USB_ep0_wait_for_complete
