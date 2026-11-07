@@ -34,9 +34,9 @@ LCD Initialization
 -----------------------------------------------------------------------------*/
 void GLCD_LcdInit(void)	{
     // Recommended power up sequence
-    clrbit(LCD_CTRL, LCD_RESET);         // Reset Low for 30 uS
+    clrbit(LCD_CTRL, LCD_RESET);         // Reset Low for 100 mS
   	delay_ms(100);
-    setbit(LCD_CTRL, LCD_RESET);         // Reset Low for 30 uS
+    setbit(LCD_CTRL, LCD_RESET);         // Reset Low for 4 mS
     delay_ms(4);
     cli();
     // Recommended initialization sequence

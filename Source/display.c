@@ -17,7 +17,7 @@ void clr_display(void) {
     uint8_t *p = Disp_send.display_data;   // Locate pointer at start of data buffer;
     uint8_t i=0;
     do {    // Erase all 1024 bytes in the buffer
-        // Unroll inner loop for speed - Clear 4 lines
+        // Unroll inner loop for speed - Clear 4 bytes per pass
         *p++=0; *p++=0; *p++=0; *p++=0;
     } while(--i);
     lcd_goto(0,0);

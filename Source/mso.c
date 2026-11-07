@@ -39,7 +39,7 @@ const uint16_t slowcnt[11] PROGMEM = { 1,2,4,8,20,40,80,200,400,800,2000 };
 
 /* Clock Timer table:
 // TCE0 freq = fPER / (N(CCA+1)) = 32M / (2(CCA+1))
-// Slow sampling: TCE0 = 640Hz, rate = 32*slowcnt/640
+// Slow sampling: TCE0 = 1600 Hz (Srate 11) or 1280 Hz, sample rate = TCE0 freq / slowcnt
 rate SCOPE SETTING  Min. F      Max.F     S/s  Oversample ADCCLK  PRESCALE TCE0 slowcnt  Method
 0       8 uS/div   7812.50Hz     1 MHz     2M      x1     2 MHz     16     x     x       DMA ADC free run
 1      16 uS/div   3906.25Hz   500 kHz     1M      x1     2 MHz     16     x     x       DMA ADC free run
@@ -2791,7 +2791,7 @@ void Apply(void) {
     TCC1.CTRLA = 0;
     TCC1.CTRLB = 0;
     // TCC0 controls the auto trigger and auto key repeat
-    TCC0.CTRLA = 0x0F;      // Event CH7: 0.04096mS period - 24.4140625 Hz
+    TCC0.CTRLA = 0x0F;      // Event CH7: 40.96 ms period - 24.4140625 Hz
     TCC0.CTRLE = 0x02;      // Timer TCC0 Split Mode
     TCC0.PERH = 24;         // Auto Key Timeout is 1.024 second
     TCC0.PERL = M.Ttimeout;
