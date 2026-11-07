@@ -213,17 +213,20 @@ void Sniff(void) {
     }
     ConfigLogicDMA();
     dma_display(); WaitDisplay();
+    uint8_t armed=0;
     while((T.LOGIC.indrx==0) && (T.LOGIC.indtx==0)) {
         WDR();
         if(M.CHDdecode!=i2c) {
             T.LOGIC.indrx=BUFFER_SERIAL-DMA.CH0.TRFCNT;
             T.LOGIC.indtx=BUFFER_SERIAL-DMA.CH1.TRFCNT;            
         }            
-        if(M.CHDdecode==spi) {
+        // Arm once, while SS is not asserted
+        if(M.CHDdecode==spi && !armed) {
             if(testbit(VPORT2.IN, 4)) {     // SS not asserted
                 SPIC.CTRL = 0b01000000 + spictrl;       // Enable SPI, Slave mode
-                PORTC.INTFLAGS = 0x03;  // Clear flags
-                PORTC.INTCTRL   = 0x0C; // Enable PortC INT 1, High Priority
+                PORTC.INTFLAGS = 0x03;      // Clear flags
+                PORTC.INTCTRL   = 0x0C;     // Enable PortC INT 1, High Priority
+                armed=1;
             }                
         }
         if(!testbit(MStatus,gosniffer)) goto exitSniffer;

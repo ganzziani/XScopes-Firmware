@@ -21,6 +21,7 @@ static inline void ShowCursorV(void);       // Display Vertical Cursor
 static inline void ShowCursorH(void);       // Display Horizontal Cursor
 static void CheckMax(void);                 // Check variables
 void CheckPost(void);                       // Check Post Trigger
+static void EP1Hold(void) __attribute__((noinline));   // Keep a pending USB frame whole (CR-050)
 
 uint8_t EEMEM EECHREF1[256] = {0};  // Reference waveform CH1
 uint8_t EEMEM EECHREF2[256] = {0};  // Reference waveform CH2
@@ -457,8 +458,9 @@ void MSO(void) {
                 _delay_us(500);             // 10ms/div may need time to complete one more sample
                 TCE0.CTRLA = 0;
                 ADCA.CTRLB = 0x14;          // signed mode, no free run, 8 bit
+                EP1Hold();                  // Avoid torn buffer during ongoing transmission
                 // capture one last sample set
-                T.SCOPE.DC.frame++;                 // Increase frame counter
+                T.SCOPE.DC.frame++;         // Increase frame counter
                 _delay_us(80);              // Wait to process ADC pipeline
                 clrbit(MStatus, triggered);
                 TCC1.CTRLA = 0;             // Stop post trigger counter
@@ -2522,8 +2524,10 @@ cancelvdc:
         printV(T.SCOPE.Vdc[1],0, CH2ctrl);
     }
     else if(testbit(MStatus,vp_p) && !testbit(MStatus,vdc)) {   // Display VPP
-                        printV((int16_t)T.SCOPE.CH1.vpp*128, M.CH1gain, CH1ctrl);
-        lcd_goto(64,2); printV((int16_t)T.SCOPE.CH2.vpp*128, M.CH2gain, CH2ctrl);
+        T.SCOPE.Vdc[0]=(int16_t)T.SCOPE.CH1.vpp*128;
+        T.SCOPE.Vdc[1]=(int16_t)T.SCOPE.CH2.vpp*128;
+                        printV(T.SCOPE.Vdc[0], M.CH1gain, CH1ctrl);
+        lcd_goto(64,2); printV(T.SCOPE.Vdc[1], M.CH2gain, CH2ctrl);
     }
     else {                          // Measure frequency
         // TCC1:Lo16 TCE0:Hi16 TCC0:Timer
@@ -3035,6 +3039,24 @@ ISR(TCC2_LUNF_vect) {
     TCC0.INTCTRLA &= ~TC2_LUNFINTLVL_LO_gc;         // Disable Trigger timeout interrupt
     setbit(MStatus, update);
     setbit(MStatus, triggered);
+}
+
+// Wait until the transmission ends before writing new data to the buffer
+static void EP1Hold(void) {
+    volatile uint8_t *st = &endpoints[1].in.STATUS;
+    uint8_t m;
+    if(*st & USB_EP_TRNCOMPL0_bm) return;       // nothing pending (the usual case)
+    m = USB_EP_BUSNACK0_bm;
+    asm volatile("las Z, %0" : "+r"(m) : "z"(st) : "memory");
+    _delay_us(50);
+    if(endpoints[1].in.AUXDATA) {               // the host is reading it
+        m = USB_EP_BUSNACK0_bm;
+        asm volatile("lac Z, %0" : "+r"(m) : "z"(st) : "memory");
+        uint16_t t=6400;                        // ~2 ms at ~10 cycles per pass
+        while(!(*st & USB_EP_TRNCOMPL0_bm) && --t);
+    }
+    m = USB_EP_BUSNACK0_bm | USB_EP_TRNCOMPL0_bm;
+    asm volatile("las Z, %0" : "+r"(m) : "z"(st) : "memory");
 }
 
 static void SetupDMACh(DMA_CH_t *ch, uint8_t trigsrc, volatile void *src, volatile void *dest) {
