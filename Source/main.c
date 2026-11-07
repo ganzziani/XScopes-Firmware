@@ -34,15 +34,13 @@
 	    USARTC0 for Sniffer
 	    USARTE0 for External Interface Port
 	RAM:
-	    1024:   Display buffer
-         128:   Endpoint0 out + in
-         128:   Endpoint1 out + in
-         768:   CH1+CH2+CHD Data
-         256:   AWG Buffer
-          31:   M
-		1536:   Temp (FFT, logic sniffer)
+	    1027:   Display buffer
+        2327:   T
+         256:   AWGBuffer
+         128:   EP0
+          32:   M
         -----
-        3871    Total + plus some global variables
+        3831    Total + plus some global variables
     Interrupt Levels:
         PORTC_INT1      High        SPI sniffer
         PORTC INT0      High        I2C sniffer
@@ -138,30 +136,30 @@ int main(void) {
     OSC.CTRL = OSC_RC32MEN_bm | OSC_PLLEN_bm | OSC_XOSCEN_bm;    // Disable internal 2MHz
 
     // PORTS CONFIGURATION
-    PORTCFG.VPCTRLA = 0x41; // VP1 Map to PORTE, VP0 Map to PORTB
-    PORTCFG.VPCTRLB = 0x32; // VP3 Map to PORTD, VP2 Map to PORTC
+    PORTCFG.VPCTRLA = 0x41;     // VP1 Map to PORTE, VP0 Map to PORTB
+    PORTCFG.VPCTRLB = 0x32;     // VP3 Map to PORTD, VP2 Map to PORTC
     // Initial value PORTA.DIR       = 0x00; // CH2, CH1, 1V, K1, K2, K3, K4, REF
-    VPORT0.DIR		= 0x0B; // PORTB.DIR RES, AWG, D/C, R/W
-    // Initial Value PORTB.OUT       = 0x00; //
-    // Initial Value PORTC.DIR       = 0x00; // LOGIC
-    VPORT3.DIR		= 0x1F; // PORTD.DIR USB, EXT, GREEN, DAT, TP, CLK, RED
-    VPORT3.OUT		= 0x04; // Green LED on, PORT.OUT LCD voltage off
-    VPORT1.DIR		= 0x09;	// PORTE.DIR TX, RX, RTS (input), CTS (power external board)
-    VPORT1.OUT		= 0x01; // PORTE.OUT Power to external board
+    VPORT0.DIR		= 0x0B;     // PORTB.DIR D/C, AWG, RES, CS
+    // Initial Value PORTB.OUT = 0x00; //
+    // Initial Value PORTC.DIR = 0x00; // LOGIC
+    VPORT3.DIR		= 0x1F;     // PORTD.DIR USB, EXT, GREEN, DAT, TP, CLK, RED
+    VPORT3.OUT		= 0x04;     // Assert power, PORT.OUT LCD voltage off
+    VPORT1.DIR		= 0x09;	    // PORTE.DIR TX, RX, RTS (input), CTS (power external board)
+    VPORT1.OUT		= 0x01;     // PORTE.OUT Power to external board
     PORTA.PIN1CTRL  = MENUPULL; // Pull up or pull down on pin PA1
-    PORTA.PIN2CTRL  = 0x18; // Pull up on pin PA2
-    PORTA.PIN3CTRL  = 0x18; // Pull up on pin PA3
-    PORTA.PIN4CTRL  = 0x18; // Pull up on pin PA4
-    PORTA.PIN5CTRL  = 0x07; // Digital Input Disable on pin PA5
-    PORTA.PIN6CTRL  = 0x07; // Digital Input Disable on pin PA6
-    PORTA.PIN7CTRL  = 0x07; // Digital Input Disable on pin PA7
-    PORTA.INTCTRL   = 0x02; // PORTA will generate medium level interrupts
-    PORTA.INT0MASK  = 0x1E; // PA4, PA3, PA2, PA1 will be the interrupt 0 sources
+    PORTA.PIN2CTRL  = 0x18;     // Pull up on pin PA2
+    PORTA.PIN3CTRL  = 0x18;     // Pull up on pin PA3
+    PORTA.PIN4CTRL  = 0x18;     // Pull up on pin PA4
+    PORTA.PIN5CTRL  = 0x07;     // Digital Input Disable on pin PA5
+    PORTA.PIN6CTRL  = 0x07;     // Digital Input Disable on pin PA6
+    PORTA.PIN7CTRL  = 0x07;     // Digital Input Disable on pin PA7
+    PORTA.INTCTRL   = 0x02;     // PORTA will generate medium level interrupts
+    PORTA.INT0MASK  = 0x1E;     // PA4, PA3, PA2, PA1 will be the interrupt 0 sources
     //PORTB.PIN2CTRL	= 0x07; // Input Disable on pin PB2
-    PORTC.INT0MASK  = 0x01; // PC0 (SDA) will be the interrupt 0 source
-    PORTC.INT1MASK  = 0x80; // PC7 (SCK) will be the interrupt 1 source
-    PORTD.PIN5CTRL  = 0x01; // Sense rising edge (Freq. counter)
-    PORTE.PIN1CTRL  = 0x18; // Pull up on pin PE1 (RTS)
+    PORTC.INT0MASK  = 0x01;     // PC0 (SDA) will be the interrupt 0 source
+    PORTC.INT1MASK  = 0x80;     // PC7 (SCK) will be the interrupt 1 source
+    PORTD.PIN5CTRL  = 0x01;     // Sense rising edge (Freq. counter)
+    PORTE.PIN1CTRL  = 0x18;     // Pull up on pin PE1 (RTS)
 
     // Initialize USARTD0 for OLED
     USARTD0.BAUDCTRLA = FBAUD;	// SPI clock rate for display
@@ -233,7 +231,7 @@ int main(void) {
     i=eeprom_read_byte(&EESleepTime);
     // Check if K2 pressed
     if(!testbit(PORTA.IN,3)) setbit(Misc,bigfont);   // Use bigfont bit to enter settings
-    Buttons=0;  // Without this, you need to press KD before power up
+    Buttons=0;
     while(testbit(Misc, bigfont)) {
         uint8_t Volt;
         clr_display();
@@ -423,7 +421,7 @@ void CalibrateOffset(void) {
         avrg1=0;
         avrg2=0;
         ADCA.CTRLB = 0x10;          // signed mode, no free run, 12 bit right adjusted
-        ADCA.PRESCALER = 0x07;      // Prescaler 512 (500kHZ ADC clock)
+        ADCA.PRESCALER = 0x07;      // Prescaler 512 (62.5kHZ ADC clock)
         i=0;
         do {
             ADCA.CH0.CTRL     = 0x83;   // Start conversion, Differential input with gain

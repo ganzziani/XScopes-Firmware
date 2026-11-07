@@ -150,30 +150,9 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
     // Commands that read or send on USARTE0 run for the serial port only: over USB they
     // would block the control request on the UART (CR-039), and with autosend on that can
     // starve the main loop into a watchdog reset (CR-045). Their replies go to the UART
-    // anyway, so a USB host has no use for them (it reads SCOPE_DATA from bulk endpoint 1).
+    // anyway, so a USB host has no use for them: it reads SCOPE_DATA, and the sniffer's
+    // decoded buffers while Sniff() runs, from bulk endpoint 1.
     if(!usb) switch(Command) {
-#ifdef TESTFIXTURE
-        // Bench diagnostic, test-fixture build only: read SRAM so the fixture can
-        // check what a command actually wrote instead of inferring it from the
-        // analog output - e.g. whether the 'x' upload is in AWGBuffer, and for how
-        // long it stays there.
-        //
-        //   'r'  addr_lo  addr_hi  count   ->  count raw bytes of data space
-        //
-        // Read-only by design (the fixture must not be able to write DUT memory
-        // this way), and UART-only like the rest of this switch.
-        case 'r':
-            i = read();                 // low address byte
-            n = read();                 // high address byte
-            p = (uint8_t *)((uint16_t)((n << 8) | i));
-            n = read();                 // byte count, 0 sends nothing
-            while(n--) send(*p++);
-            n = 0;
-        break;
-#endif
-        case 'l':   // Send the sniffer's decoded data
-            for(uint16_t i=0; i<1280; i++) send(T.LOGIC.data.decoded[i]);
-        break;
         case 's':   // Send SCOPE_DATA: CH1, CH2, CHD, frame, index
             p=(uint8_t *)T.SCOPE.DC.CH1data;
             for(uint16_t i=0; i<sizeof(SCOPE_DATA); i++) send(*p++);
@@ -198,6 +177,40 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
         for(; i<64 && o<BMP_SIZE; i++, o++) ep0_buf_in[i] = bmp_byte(o);
         return i;
     }
+#ifdef TESTFIXTURE
+    // Bench commands, test-fixture build only, and USB only: the parameters come from
+    // the setup packet and the reply is ep0_buf_in, so nothing waits on USARTE0 and
+    // the serial port keeps the shipping command set. Over the UART they are unknown
+    // bytes (ignored).
+    //
+    //   'K'  wValue = keys             ->  Misc, Index, Menu, Buttons (GPIORC..F)
+    //        Simulated key press, so the fixture can walk the menus and every other
+    //        user interaction ('b' cannot: index 12+ maps to M, so GPIORC..F are out of
+    //        its reach). keys = the PORTA pins held down, as on the board: bit 1 MENU,
+    //        bit 2, bit 3 K2, bit 4 (bits 2 and 4 are K1/K3, swapped by Display.flip).
+    //        The pattern goes through KeyInput(), the key ISR's own decode, so the press
+    //        raises userinput and update exactly like a debounced key. 0 = release (as
+    //        the ISR sees it on key up); bit 7 set = only report the four registers.
+    //   'r'  wIndex = address, wValue = count (1..64)  ->  data space (SRAM, I/O)
+    //   'R'  wIndex = offset,  wValue = count (1..64)  ->  EEPROM
+    //        Read-only by design: the fixture checks what a command actually wrote
+    //        (AWGBuffer, TCD1.PER, calibration tables) instead of inferring it from the
+    //        analog output, and it must not be able to write DUT memory this way.
+    else if(Command=='K') {
+        index = lobyte(req->wValue);
+        if(!(index & 0x80)) KeyInput((uint8_t)(~index & 0x1E));
+        p=(uint8_t *)&Misc; for(; i<4; i++) ep0_buf_in[i]=*p++;   // GPIORC..F
+        return 4;
+    }
+    else if(Command=='r' || Command=='R') {
+        uint16_t a = req->wIndex;
+        n = lobyte(req->wValue);
+        if(n > sizeof(ep0_buf_in)) n = sizeof(ep0_buf_in);
+        for(; i<n; i++, a++)
+            ep0_buf_in[i] = (Command=='r') ? *(uint8_t *)a : eeprom_read_byte((const uint8_t *)a);
+        return n;
+    }
+#endif
     switch(Command) {
         case 'a':   // Send firmware version
             p = (uint8_t *)(VERSION+3);
@@ -287,52 +300,6 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
             setbit(MStatus, updatemso);     // Apply settings
             setbit(MStatus, updateawg);     // Generate wave                       
         break;
-#ifdef TESTFIXTURE
-        // Test-fixture build only: simulated key press, so the fixture can walk the
-        // menus and every other user interaction. 'b' cannot do it: index 12+ maps
-        // to M, so GPIORC..F (Misc, Index, Menu, Buttons) are out of its reach.
-        //
-        //   'K'  keys   ->  Misc, Index, Menu, Buttons (GPIORC..F, after the press)
-        //
-        // keys = the PORTA pins held down, as on the board: bit 1 MENU, bit 2,
-        // bit 3 K2, bit 4 (bits 2 and 4 are K1/K3, swapped by Display.flip). The
-        // pattern goes through KeyInput(), the key ISR's own decode, so the press
-        // raises userinput and update exactly like a debounced key. 0 = release
-        // (as the ISR sees it on key up). Bit 7 set = only report the four
-        // registers. Over USB: wValue = keys.
-        case 'K':
-            index = usb ? lobyte(req->wValue) : read();
-            if(!(index & 0x80)) KeyInput((uint8_t)(~index & 0x1E));
-            p=(uint8_t *)&Misc; for(; i<4; i++) ep0_buf_in[i]=*p++;   // GPIORC..F
-            n=4;
-        break;
-        // Bench diagnostic, test-fixture build only: read EEPROM, the counterpart of
-        // 'r' for the non-volatile side (reference waveforms, calibration tables,
-        // stored settings). Read-only by design.
-        //
-        //   'R'  addr_lo  addr_hi  count   ->  count raw bytes of EEPROM (1..64)
-        //
-        // Unlike 'r' this one works over both transports: the parameters come from the
-        // setup packet over USB and the reply is the ep0 buffer, so nothing waits on
-        // USARTE0 (the CR-039 trap). 'r' reads RAM, 'R' reads EEPROM.
-        case 'R':
-        {
-            uint16_t ea;
-            if(usb) {
-                ea = req->wIndex;           // EEPROM offset
-                n  = lobyte(req->wValue);   // byte count
-            }
-            else {
-                i  = read();                            // low address byte
-                ea = (uint16_t)(((uint16_t)read() << 8) | i);  // high address byte
-                n  = read();                            // byte count
-            }
-            if(n > sizeof(ep0_buf_in)) n = sizeof(ep0_buf_in);
-            for(i=0; i<n; i++)
-                ep0_buf_in[i] = eeprom_read_byte((const uint8_t *)(uint16_t)(ea+i));
-        }
-        break;
-#endif
         case 'm':   // Send METER measurement
             p = (uint8_t *)(&T.SCOPE.MeterFreq);
             for(uint8_t i=0; i<4; i++) ep0_buf_in[i]=*p++;

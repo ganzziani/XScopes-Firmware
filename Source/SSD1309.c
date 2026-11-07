@@ -1,5 +1,5 @@
 /* ----------------------------------------------------------------------------
-	128x64 Graphic LCD management for SSD1305 driver
+	128x64 Graphic LCD management for SSD1309 driver
 
 	FILE NAME 	: SSD1309.c
 	LAYER		: Application
