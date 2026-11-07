@@ -12,14 +12,14 @@
 
 // Function prototypes
 static void Reduce(void);
-static void RestorefromMeter(void);		        // Restores srate and gains
-static void GoingtoMeter(void);			        // Saves srate and gains
+static void RestorefromMeter(void);		    // Restores srate and gains
+static void GoingtoMeter(void);			    // Saves srate and gains
 static uint8_t fft_stuff(uint8_t *p);
-static void AutoCursorV(void);                     // Automatically set vertical the cursors
+static void AutoCursorV(void);              // Automatically set vertical the cursors
 static inline void Measurements(void);      // Measurements for Meter Mode
 static inline void ShowCursorV(void);       // Display Vertical Cursor
 static inline void ShowCursorH(void);       // Display Horizontal Cursor
-static void CheckMax(void);                        // Check variables
+static void CheckMax(void);                 // Check variables
 void CheckPost(void);                       // Check Post Trigger
 
 uint8_t EEMEM EECHREF1[256] = {0};  // Reference waveform CH1
@@ -322,8 +322,9 @@ void MSO(void) {
     T.SCOPE.shortcuti = 0;      // shortcut index
         
     uint16_t Tpost;
-    int16_t AWGsweepi;          // AWG sweep counter
-    uint8_t AWGspeed;           // AWG sweep increment
+    int16_t AWGsweepi = 0;      // AWG sweep counter; the range check brings it to Sweep1..Sweep2
+    uint8_t AWGspeed = 0;       // AWG sweep increment (M.SWSpeed, or accelerated from it)
+    uint8_t lastSWSpeed = 0;    // M.SWSpeed when AWGspeed was last loaded from it
     uint8_t chdtrigpos;         // Digital channel trigger position
 
     T.SCOPE.old_s=Srate;
@@ -634,7 +635,7 @@ void MSO(void) {
             if(testbit(Sweep,SweepD)) M.AWGduty   =  (uint8_t)(AWGsweepi>>4);
             int16_t sweepmin, sweepmax;
             int8_t sweepinc;
-            if(AWGspeed==0) AWGspeed = M.SWSpeed;
+            if(M.SWSpeed != lastSWSpeed) AWGspeed = lastSWSpeed = M.SWSpeed;    // Apply new M.SWSpeed
             if(!testbit(Sweep,swdown)) sweepinc=AWGspeed; else sweepinc=-AWGspeed;
             sweepmin = (uint16_t)M.Sweep1*16;
             sweepmax = (uint16_t)M.Sweep2*16;
@@ -952,10 +953,10 @@ void MSO(void) {
 // Send single point data
         if(testbit(Misc,slowacq)) {
             clrbit(Misc,slowacq);
+            T.SCOPE.DC.index = Index;
 			// USB - Send new data if previous transfer complete
 			if((endpoints[1].in.STATUS & USB_EP_TRNCOMPL0_bm)) {
                 RTC.CNT = 0;    // Prevent going to sleep if connected to USB
-                T.SCOPE.DC.index = Index;
 				endpoints[1].in.AUXDATA = 0;				// New transfer must clear AUXDATA
 				endpoints[1].in.CNT = 770 | USB_EP_ZLP_bm;	// Send 256*3 bytes + frame, enable Auto Zero Length Packet
 				endpoints[1].in.STATUS &= ~(USB_EP_TRNCOMPL0_bm | USB_EP_BUSNACK0_bm | USB_EP_OVF_bm);
@@ -2242,30 +2243,23 @@ checknext:
             if((testbit(Trigger, normal) || testbit(Trigger, autotrg)) && testbit(MFFT, scopemode)) {
                 chdtrigpos = 255;
                 if(Srate>=11 || hibyte(M.Tpost)==0) {
-                    uint8_t trig1, trig2;
-                    if(testbit(Trigger, window)) trig1=M.Window1;
+                    uint8_t trig1, trig2=M.Window2, down=1;  // down: the mark at trig1 points down
+                    if(testbit(Trigger, window)) trig1=M.Window1;   // window: down at Window1, up at Window2
                     else {
                         trig1=M.Tlevel;
-                        if(testbit(Trigger,trigdir)) setbit(Misc,bigfont);
+                        if(!testbit(Trigger,trigdir)) down=0;       // edge: down for a falling edge
                     }
-                    trig2=M.Window2;
-                    if(M.Tsource==0) {                      // Adjust position relative to CH1
-                        if(testbit(CH1ctrl,chinvert)) {
+                    if(M.Tsource<=1) {                      // Adjust position relative to CH1 or CH2
+                        uint8_t ctrl=CH1ctrl;
+                        int8_t pos=M.CH1pos;
+                        if(M.Tsource) { ctrl=CH2ctrl; pos=M.CH2pos; }
+                        if(testbit(ctrl,chinvert)) {        // the channel is drawn upside down
                             trig1=255-trig1;
                             trig2=255-trig2;
-                            togglebit(Misc, bigfont);
+                            down^=1;
                         }
-                        trig1+=M.CH1pos;
-                        trig2+=M.CH1pos;
-                    }
-                    else if(M.Tsource==1) {                 // Adjust position relative to CH2
-                        if(testbit(CH2ctrl,chinvert)) {
-                            trig1=255-trig1;
-                            trig2=255-trig2;
-                            togglebit(Misc, bigfont);
-                        }
-                        trig1+=M.CH2pos;
-                        trig2+=M.CH2pos;
+                        trig1+=pos;
+                        trig2+=pos;
                     }
                     trig1=trig1>>1; // Trigger or Window Trigger 1
                     trig2=trig2>>1; // Window Trigger 2
@@ -2280,40 +2274,20 @@ checknext:
                         if((Display&0x03)==2) {     // Grid Vertical dots follow trigger
                             vertical_dots(trigpos);
                         }
-                        if(testbit(Trigger, window)) {
-                            if(trig1<=(DISPLAY_MAX_Y-3) && testbit(Misc, bigfont)) { // up
-                                sprite(trigpos, trig1, TrigUp);
-                            }
-                            else if(trig1>=3 && trig1<=DISPLAY_MAX_Y && !testbit(Misc, bigfont)) { // down
-                                sprite(trigpos, trig1, TrigDown);
-                            }
-                            if(trig2<=(DISPLAY_MAX_Y-3) && testbit(Misc, bigfont)) { // down
-                                sprite(trigpos, trig2, TrigDown);
-                            }
-                            else if(trig2>=3 && trig2<=DISPLAY_MAX_Y && !testbit(Misc, bigfont)) { // up
-                                sprite(trigpos, trig2, TrigUp);
-                            }
-                        }
-                        else if(testbit(Trigger, slope)) {
+                        // Same priority as the trigger itself: window, slope, edge, dual edge
+                        if(!testbit(Trigger, window) && testbit(Trigger, slope)) {
                             uint8_t trigy;
                             trigy=M.Tlevel>>2;
                             set_line(trigpos,trigy,trigpos+2,trigy);
                             trigy=(uint8_t)(-M.Tlevel)>>2;
                             set_line(trigpos,trigy,trigpos+2,trigy);
                         }
-                        else if(testbit(Trigger, edge)) {
-                            if(trig1<=(DISPLAY_MAX_Y-3) && testbit(Misc, bigfont)) { // down
-                                sprite(trigpos, trig1, TrigDown);
-                            }
-                            else if(trig1>=3 && trig1<=DISPLAY_MAX_Y && !testbit(Misc, bigfont)) { // up
-                                sprite(trigpos, trig1, TrigUp);
-                            }
+                        else if(testbit(Trigger, window) || testbit(Trigger, edge)) {   // sprite() skips a mark that does not fit
+                            sprite(trigpos, trig1, down ? TrigDown : TrigUp);
+                            if(testbit(Trigger, window)) sprite(trigpos, trig2, down ? TrigUp : TrigDown);
                         }
-                        else if(trig1>=3 && trig1<=(DISPLAY_MAX_Y-3)) {  // Dual edge trigger
-                            sprite(trigpos, trig1, TrigDual);
-                        }
+                        else sprite(trigpos, trig1, TrigDual);  // Dual edge trigger
                     }
-                    clrbit(Misc,bigfont);
                 }
             }
         }

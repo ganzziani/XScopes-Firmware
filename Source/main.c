@@ -307,6 +307,14 @@ ISR(PORTA_INT0_vect) {
 		in = PORTA.IN & 0x1E;       // Read port
 		if(j!=in) { j=in; i=10; }   // Value changed
 	}
+    KeyInput(in);
+}
+
+// Decode a debounced PORTA key pattern (bits 1..4, low = pressed) into Buttons and
+// raise userinput, exactly as a key press does. Shared with the test fixture's
+// simulated key press ('K', interface.c, TESTFIXTURE builds only), so a simulated
+// press goes through the same mapping - including the K1/K3 swap under Display.flip.
+void KeyInput(uint8_t in) {
     Buttons=0;
     if(!testbit(in,1)) setbit(Buttons, KM); // Menu key
     #ifdef PORTABLE

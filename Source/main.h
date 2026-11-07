@@ -155,6 +155,7 @@ void MSO(void);
 void Restore(void);
 void SaveEE(void);          // Save settings to EEPROM
 void CalibrateOffset(void);
+void KeyInput(uint8_t in);      // PORTA key pattern -> Buttons + userinput (key ISR)
 uint8_t ReadCalibrationByte(uint8_t location);	// Read out calibration byte
 
 extern uint8_t EEMEM EESleepTime;     // Sleep timeout in minutes
@@ -173,7 +174,7 @@ typedef struct {
     uint8_t CHDdata[256];       // CHD Samples
     uint8_t frame;              // Frame number
     uint8_t index;              // Index number
-} DATA;
+} SCOPE_DATA;
 
 // Big buffer to store large but temporary data
 typedef union {
@@ -198,7 +199,7 @@ typedef union {
         uint8_t old_s, old_g1, old_g2;      // sampling, gains before entering meter mode
         uint8_t shortcuti;                  // shortcut index
         ACHANNEL CH1,CH2;                   // Analog Channel 1, Channel 2
-        DATA DC;                            // Data samples
+        SCOPE_DATA DC;                      // Data samples
     } SCOPE;
     struct {
         int8_t AWGTemp1[BUFFER_AWG];
