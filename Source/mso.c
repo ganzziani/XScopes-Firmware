@@ -22,6 +22,7 @@ static inline void ShowCursorH(void);       // Display Horizontal Cursor
 static void CheckMax(void);                 // Check variables
 void CheckPost(void);                       // Check Post Trigger
 static void EP1Hold(void) __attribute__((noinline));   // Keep a pending USB frame whole (CR-050)
+static void SlowSamplingOn(void);           // Enable the slow sampling interrupt (CR-053)
 
 uint8_t EEMEM EECHREF1[256] = {0};  // Reference waveform CH1
 uint8_t EEMEM EECHREF2[256] = {0};  // Reference waveform CH2
@@ -540,39 +541,35 @@ void MSO(void) {
                     }
                 } while (++i);
 				if(testbit(Misc,autosend)) {
-                    p1=T.SCOPE.DC.CH1data;
                     send(0x0D);
                     send(0x0A);
                     send('F');
-	                for(uint16_t i16=0;i16<256*3;i16++) send(*p1++);
-/*                    i=0;
-                    uint8_t onChannels=0x30;
+                    i=0;
+                    uint8_t onChannels='0';
                     if(testbit(CH1ctrl,chon)) {
                         onChannels +=1;
+                        p1=T.SCOPE.DC.CH1data;
                         do {
                             send(*p1++);
                         } while(++i);
                     }
                     if(testbit(CH2ctrl,chon)) {
                         onChannels +=2;
-                        p1=DC.CH2data;
+                        p1=T.SCOPE.DC.CH2data;
                         do {
                             send(*p1++);
                         } while(++i);
                     }
                     if(testbit(CHDctrl,chon)) {
                         onChannels +=4;
-                        p1=DC.CHDdata;
+                        p1=T.SCOPE.DC.CHDdata;
                         do {
                             send(*p1++);
                         } while(++i);
                     }
                     send(0x0A);
                     send(0x0D);
-                    send(onChannels);            // Send which channels are active*/
-                    send(0x0A);
-                    send(0x0D);
-                    send('7');
+                    send(onChannels);            // Send which channels are active
 				}
 				// USB - Send new data if previous transfer complete
 				if((endpoints[1].in.STATUS & USB_EP_TRNCOMPL0_bm)) {
@@ -586,9 +583,9 @@ void MSO(void) {
             else {
                 if(testbit(Mcursors,roll)) {
                     clrbit(MStatus, triggered);
-                    if(!testbit(MStatus,stop)) TCE0.INTCTRLA = TC_OVFINTLVL_MED_gc;    // Enable sampling interrupt
+                    if(!testbit(MStatus,stop)) SlowSamplingOn();
                 }
-                else if(!testbit(Misc,sacquired)) TCE0.INTCTRLA = TC_OVFINTLVL_MED_gc;  // Enable sampling interrupt
+                else if(!testbit(Misc,sacquired)) SlowSamplingOn();
                 else {    // Acquired complete buffer
                     clrbit(Misc, sacquired);
                     clrbit(MStatus, triggered);
@@ -2872,6 +2869,13 @@ void Apply(void) {
     PORTC.PIN0CTRL  = temp;
 	clrbit(MStatus, updatemso);
  }
+
+// Prevents starting a frame with a duplicated sample because of a pending interrupt
+static void SlowSamplingOn(void) {
+    if(TCE0.INTCTRLA) return;             // Only on the way from off to on
+    TCE0.INTFLAGS = TC0_OVFIF_bm;         // Clear any pending interrupts
+    TCE0.INTCTRLA = TC_OVFINTLVL_MED_gc;  // Enable the slow sampling interrupt
+}
 
 // Slow sampling control - 640Hz or 1600Hz
 ISR(TCE0_OVF_vect) {

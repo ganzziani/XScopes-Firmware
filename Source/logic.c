@@ -198,17 +198,18 @@ void Sniff(void) {
         TCC1.INTCTRLB = 0x03;           // Enable TCC1 CCA interrupt, High Priority
     }
     else if(M.CHDdecode==spi) {
-        uint8_t pin7ctrl=1;   // Sense rising edge
+        uint8_t inv = testbit(CHDctrl,digchinvert) ? PORT_INVEN_bm : 0;
+        uint8_t pin7ctrl=inv+1;   // Sense rising edge
         print3x6(PSTR("SPI SNIFFER\nBIT4:/SS\nBIT5:MOSI\nBIT6:MISO\nBIT7:SCK"));
         if(testbit(Sniffer,CPOL)) {    // CPOL == 1
-            pin7ctrl = PORT_INVEN_bm+1;   // Invert SCK, Sense rising edge
+            pin7ctrl ^= PORT_INVEN_bm;    // Invert SCK
         }
         if(testbit(Sniffer,CPHA)) {
             spictrl=0x04;  // CPHA == 1
         }
         PORTC.PIN7CTRL = pin7ctrl;
         if(testbit(Sniffer,SSINV)) {    // Invert Slave select
-            PORTC.PIN4CTRL = PORT_INVEN_bm;
+            PORTC.PIN4CTRL = PORT_INVEN_bm^inv;
         }
     }
     ConfigLogicDMA();

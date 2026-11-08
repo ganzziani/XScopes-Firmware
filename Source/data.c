@@ -71,7 +71,7 @@ const NVMVAR FLM PROGMEM = {    // Flash Copy
     1,      //  Sweep1;         // Sweep Start Frequency
     255,    //  Sweep2;         // Sweep End Frequency
     16,     //  SWSpeed;        // Sweep Speed
-    -128,   //  AWGamp;         // Amplitude  4V
+    -124,   //  AWGamp;         // Amplitude 3.88V
     1,      //  AWGtype;        // Waveform type Sinewave
     128,    //  AWGduty;        // Duty cycle range: 50%
     0,      //  AWGoffset;      // Offset 0V
@@ -103,7 +103,7 @@ NVMVAR EEMEM EEM = {            // EEMEM Copy
     1,      //  Sweep1;         // Sweep Start Frequency
     255,    //  Sweep2;         // Sweep End Frequency
     16,     //  SWSpeed;        // Sweep Speed
-    -128,   //  AWGamp;         // Amplitude  4V
+    -124,   //  AWGamp;         // Amplitude 3.88V
     1,      //  AWGtype;        // Waveform type Sinewave
     128,    //  AWGduty;        // Duty cycle range: 50%
     0,      //  AWGoffset;      // Offset 0V
