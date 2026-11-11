@@ -312,7 +312,10 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
             p=(uint8_t *)&M; for(; i<44; i++) ep0_buf_in[i]=*p++;   // M
             n=44;
         break;
-		case 0xBB: // disconnect from USB, jump to bootloader
+		case 0xBB: // disconnect from USB, jump to bootloader. USB only: the bootloader has no
+                   // serial interface, so a stray 0xBB on the UART must not leave the device
+                   // in a mode the PC cannot reach it in.
+            if(!usb) break;
             // USB_ep0_wait_for_complete
 			USB_ep0_in_start(0);
             endpoints[0].out.STATUS &= ~(USB_EP_SETUP_bm | USB_EP_TRNCOMPL0_bm | USB_EP_BUSNACK0_bm);
