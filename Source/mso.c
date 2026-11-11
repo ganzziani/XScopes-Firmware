@@ -21,7 +21,7 @@ static inline void ShowCursorV(void);       // Display Vertical Cursor
 static inline void ShowCursorH(void);       // Display Horizontal Cursor
 static void CheckMax(void);                 // Check variables
 void CheckPost(void);                       // Check Post Trigger
-static void EP1Hold(void) __attribute__((noinline));   // Keep a pending USB frame whole (CR-050)
+static void EP1Hold(void) __attribute__((noinline));   // Keep a pending USB frame whole
 static void SlowSamplingOn(void);           // Enable the slow sampling interrupt (CR-053)
 
 uint8_t EEMEM EECHREF1[256] = {0};  // Reference waveform CH1

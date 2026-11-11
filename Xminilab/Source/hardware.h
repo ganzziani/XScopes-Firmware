@@ -4,6 +4,8 @@
 #ifndef HARDWARE_H
 #define HARDWARE_H
 
+#define DEVICE_CODE         0x13        // USB bcdDevice low byte: Xminilab (Descriptors.c)
+
 #include "SSD1305.h"
 
 #define MENUPULL            0x18        // Menu button Pull up

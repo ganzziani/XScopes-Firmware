@@ -4,6 +4,8 @@
 #ifndef HARDWARE_H
 #define HARDWARE_H
 
+#define DEVICE_CODE         0x10        // USB bcdDevice low byte: Xprotolab (Descriptors.c)
+
 #include "SSD1306.h"
 
 #define MENUPULL            0x18        // Menu button Pull up

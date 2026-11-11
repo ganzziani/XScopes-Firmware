@@ -36,6 +36,12 @@
  *  the device's capabilities and functions. */
 
 #include "Descriptors.h"
+#include "hardware.h"            // DEVICE_CODE
+
+#ifndef DEVICE_CODE
+#error "hardware.h must define DEVICE_CODE (USB bcdDevice low byte)"
+#endif
+#define DESCRIPTOR_REV          0x01
 
 /** Device descriptor structure. This descriptor, located in FLASH memory, describes the overall
  *  device characteristics, including the supported USB version, control endpoint size and the
@@ -50,7 +56,7 @@ const USB_Descriptor_Device_t PROGMEM XmegaScope_DeviceDescriptor = {
 	.Endpoint0Size          = USB_EP0SIZE,
 	.VendorID               = 0x16D0,
 	.ProductID              = 0x06F9,
-	.ReleaseNumber          = 0x0101,	// 01.01, bumped so Windows re-reads the MS OS descriptors
+	.ReleaseNumber          = (DESCRIPTOR_REV << 8) | DEVICE_CODE,	// see DEVICE_CODE above
 	.ManufacturerStrIndex   = 0x01,
 	.ProductStrIndex        = 0x02,
 	.SerialNumStrIndex      = USE_INTERNAL_SERIAL,

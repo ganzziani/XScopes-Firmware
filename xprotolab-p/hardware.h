@@ -4,6 +4,8 @@
 #ifndef HARDWARE_H
 #define HARDWARE_H
 
+#define DEVICE_CODE         0x12        // USB bcdDevice low byte: Xprotolab Portable (Descriptors.c)
+
 #include "SSD1306.h"
 
 #define MENUPULL            0x50        // Menu button Pull down, invert pin
