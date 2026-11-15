@@ -303,8 +303,18 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
         case 'm':   // Send METER measurement
             p = (uint8_t *)(&T.SCOPE.MeterFreq);
             for(uint8_t i=0; i<4; i++) ep0_buf_in[i]=*p++;
-            n=4;
-        break;            
+            p = (uint8_t *)(&T.SCOPE.CH1);
+            for(uint8_t i=4; i<4+sizeof(T.SCOPE.CH1)+sizeof(T.SCOPE.CH2); i++) ep0_buf_in[i]=*p++;
+            // The PC needs the timebase, the auto-setup state and the gains that
+            // produced those readings: the meter restarts its auto-setup for every
+            // measurement, and reading these separately races it. adjusting==0 marks
+            // the settled reading the device itself displays.
+            ep0_buf_in[14] = Srate;
+            ep0_buf_in[15] = T.SCOPE.adjusting;
+            ep0_buf_in[16] = M.CH1gain;
+            ep0_buf_in[17] = M.CH2gain;
+            n=18;
+        break;
         case 'p': clrbit(Misc,autosend); break;    // Do not automatically send data to UART
         case 'q': setbit(Misc,autosend); break;    // Automatically send data to UART
         case 'u':   // Send settings to PC

@@ -9,6 +9,7 @@
 
 #include <util/delay.h>
 #include "..\main.h"
+#include "..\utils.h"
 #include "usb_xmega.h"
 #include "..\mso.h"
 #include "..\interface.h"
@@ -91,7 +92,7 @@ static inline void USB_handleSetConfiguration(USB_Request_Header_t* req) {
 	USB_Device_ConfigurationNumber = (uint8_t)(req -> wValue);
 
 	if (USB_Device_ConfigurationNumber) USB_DeviceState = DEVICE_STATE_Configured;
-	else							    USB_DeviceState = (USB.ADDR) ? DEVICE_STATE_Configured : DEVICE_STATE_Powered;
+	else							    USB_DeviceState = (USB.ADDR) ? DEVICE_STATE_Addressed : DEVICE_STATE_Powered;
 }
 
 void USB_ResetInterface(void) {

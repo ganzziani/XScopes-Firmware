@@ -2879,16 +2879,28 @@ static void SlowSamplingOn(void) {
 
 // Slow sampling control - 640Hz or 1600Hz
 ISR(TCE0_OVF_vect) {
-    static uint16_t count=0;
-    static uint32_t sum1,sum2;
     uint8_t mul,chd,ch1,ch2,sch1,sch2;
     uint8_t ou8CursorX,ou8CursorY;
 
     ou8CursorX = u8CursorX;
     ou8CursorY = u8CursorY;
-    // Get and apply offset
-    ch1 = ADCA.CH0.RESL; ch1 = saddwsat(ch1,T.SCOPE.CH1.offset);
-    ch2 = ADCA.CH1.RESL; ch2 = saddwsat(ch2,T.SCOPE.CH2.offset);
+    // Acquire
+    ch1 = ADCA.CH0.RESL;
+    ch2 = ADCA.CH1.RESL;
+    // Derivative
+    if(testbit(CH1ctrl,derivative)) {
+        uint8_t prev=ch1;
+        ch1 = ch1 - T.SCOPE.slow_prev1;
+        T.SCOPE.slow_prev1=prev;
+    }
+    if(testbit(CH2ctrl,derivative)) {
+        uint8_t prev=ch2;
+        ch2 = ch2 - T.SCOPE.slow_prev2;
+        T.SCOPE.slow_prev2=prev;
+    }
+    // Offset
+    ch1 = saddwsat(ch1,T.SCOPE.CH1.offset);
+    ch2 = saddwsat(ch2,T.SCOPE.CH2.offset);
     // Invert
     if(testbit(CH1ctrl,chinvert)) ch1 = 255-ch1;
     if(testbit(CH2ctrl,chinvert)) ch2 = 255-ch2;
@@ -2904,17 +2916,17 @@ ISR(TCE0_OVF_vect) {
         if(testbit(CH2ctrl,submult)) ch2=addwsat(ch2,-(int8_t)sch1);   // CH1+CH2
         else ch2=mul;                                                  // CH1*CH2
     }
-    sum1+=ch1;
-    sum2+=ch2;
+    T.SCOPE.slow_sum1+=ch1;
+    T.SCOPE.slow_sum2+=ch2;
 
-    count++;
+    T.SCOPE.slow_count++;
     setbit(Misc,slowacq);
-    if(count>=T.SCOPE.slowval) {
-        count=0;
+    if(T.SCOPE.slow_count>=T.SCOPE.slowval) {
+        T.SCOPE.slow_count=0;
         // Average
-        if(testbit(CH1ctrl,chaverage)) ch1=sum1/T.SCOPE.slowval;
-        if(testbit(CH2ctrl,chaverage)) ch2=sum2/T.SCOPE.slowval;
-        sum1=0; sum2=0;
+        if(testbit(CH1ctrl,chaverage)) ch1=T.SCOPE.slow_sum1/T.SCOPE.slowval;
+        if(testbit(CH2ctrl,chaverage)) ch2=T.SCOPE.slow_sum2/T.SCOPE.slowval;
+        T.SCOPE.slow_sum1=0; T.SCOPE.slow_sum2=0;
         if(testbit(Display,elastic)) {
             ch1=average(T.SCOPE.DC.CH1data[Index],ch1);
             ch2=average(T.SCOPE.DC.CH2data[Index],ch2);
@@ -2935,7 +2947,7 @@ ISR(TCE0_OVF_vect) {
     }
     if(testbit(MFFT, scopemode) && !testbit(Mcursors,roll)) {  // Draw data if in scope mode
         // Draw Channel 1
-        if(count==0 || !testbit(CH1ctrl,chaverage)) {
+        if(T.SCOPE.slow_count==0 || !testbit(CH1ctrl,chaverage)) {
             uint8_t oldch1;
             // Apply position
             ch1=addwsat(ch1,M.CH1pos);
@@ -2955,7 +2967,7 @@ ISR(TCE0_OVF_vect) {
             }
         }
         // Draw Channel 2
-        if(count==0 || !testbit(CH2ctrl,chaverage)) {
+        if(T.SCOPE.slow_count==0 || !testbit(CH2ctrl,chaverage)) {
             uint8_t oldch2;
             // Apply position
             ch2=addwsat(ch2,M.CH2pos);
@@ -2970,7 +2982,7 @@ ISR(TCE0_OVF_vect) {
                     if(testbit(CH2ctrl,chon)) set_line(Index>>1, ch2, (Index-1)>>1, oldch2);
             }
             else {
-                // Don't draw when data==0 or data==63, signal could be clipping
+                // Don't draw when data==0 or data==DISPLAY_MAX_Y, signal could be clipping
                 if(testbit(CH2ctrl,chon) && ch2 && ch2<DISPLAY_MAX_Y) set_pixel(Index>>1, ch2);
             }
         }
@@ -3003,7 +3015,7 @@ ISR(TCE0_OVF_vect) {
         }
     }
     else if(testbit(MFFT, fftmode) && testbit(Display,showset)) set_pixel(Index>>1, 63);   // FFT progress
-    if(count==0) {
+    if(T.SCOPE.slow_count==0) {
         Index++;
         if(Index==0) {
             setbit(Misc,sacquired);

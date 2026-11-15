@@ -156,7 +156,6 @@ void Restore(void);
 void SaveEE(void);          // Save settings to EEPROM
 void CalibrateOffset(void);
 void KeyInput(uint8_t in);      // PORTA key pattern -> Buttons + userinput (key ISR)
-uint8_t ReadCalibrationByte(uint8_t location);	// Read out calibration byte
 
 extern uint8_t EEMEM EESleepTime;     // Sleep timeout in minutes
 
@@ -196,9 +195,17 @@ typedef union {
         };
         uint8_t  adjusting;                 // Auto setup adjusting step
         uint16_t slowval;                   // Slow sampling rate time value
+        uint16_t slow_count;
+        uint32_t slow_sum1;
+        uint32_t slow_sum2;
+        uint8_t slow_prev1;                 // Previous samples for the derivative
+        uint8_t slow_prev2;
         uint8_t old_s, old_g1, old_g2;      // sampling, gains before entering meter mode
         uint8_t shortcuti;                  // shortcut index
-        ACHANNEL CH1,CH2;                   // Analog Channel 1, Channel 2
+        struct {
+            ACHANNEL CH1;                   // Analog Channel 1
+            ACHANNEL CH2;                   // Analog Channel 2
+        };            
         SCOPE_DATA DC;                      // Data samples
     } SCOPE;
     struct {
