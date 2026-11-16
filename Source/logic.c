@@ -93,6 +93,9 @@ const uint16_t TCC1val[8] PROGMEM = {
     277,    // 115200
 };
 
+// I2C decoder state, kept by the interrupts below (see there)
+static volatile uint8_t i2c_acc, i2c_first, i2c_byte;
+
 void ConfigLogicDMA(void) {
     setbit(DMA.CH0.CTRLA,6);    // reset DMA CH0
     setbit(DMA.CH1.CTRLA,6);    // reset DMA CH1
@@ -136,14 +139,23 @@ void ConfigLogicDMA(void) {
         DMA.CH0.CTRLA     = 0b10100100;   // repeat, 1 byte burst
     }
 
-    // For UART and SPI Sniffer, bit-bang / DMA:
+    // For UART and SPI Sniffer, bit-bang / DMA; for I2C the decoder's bytes
     DMA.CH1.ADDRCTRL  = 0b10000101;     // reload source addr after each burst, incr dest, reload dest end block
-    DMA.CH1.TRFCNT    = BUFFER_SERIAL;            // buffer size
-    DMA.CH1.DESTADDR0 = (((uint16_t) T.LOGIC.data.Serial.TX)     ) & 0xFF;
-    DMA.CH1.DESTADDR1 = (((uint16_t) T.LOGIC.data.Serial.TX)>>1*8) & 0xFF;
     //DMA.CH1.TRIGSRC   = 0x00;               // Manual
-    DMA.CH1.SRCADDR0  = (((uint16_t)(&T.LOGIC.addr_ack_pos))     ) & 0xFF;
-    DMA.CH1.SRCADDR1  = (((uint16_t)(&T.LOGIC.addr_ack_pos))>>1*8) & 0xFF;
+    if(M.CHDdecode == i2c) {
+        DMA.CH1.TRFCNT    = BUFFER_I2C;
+        DMA.CH1.DESTADDR0 = (((uint16_t) T.LOGIC.data.I2C.decoded)     ) & 0xFF;
+        DMA.CH1.DESTADDR1 = (((uint16_t) T.LOGIC.data.I2C.decoded)>>1*8) & 0xFF;
+        DMA.CH1.SRCADDR0  = (((uint16_t)(&i2c_byte))     ) & 0xFF;
+        DMA.CH1.SRCADDR1  = (((uint16_t)(&i2c_byte))>>1*8) & 0xFF;
+    }
+    else {
+        DMA.CH1.TRFCNT    = BUFFER_SERIAL;            // buffer size
+        DMA.CH1.DESTADDR0 = (((uint16_t) T.LOGIC.data.Serial.TX)     ) & 0xFF;
+        DMA.CH1.DESTADDR1 = (((uint16_t) T.LOGIC.data.Serial.TX)>>1*8) & 0xFF;
+        DMA.CH1.SRCADDR0  = (((uint16_t)(&T.LOGIC.addr_ack_pos))     ) & 0xFF;
+        DMA.CH1.SRCADDR1  = (((uint16_t)(&T.LOGIC.addr_ack_pos))>>1*8) & 0xFF;
+    }
 
     if(testbit(Mcursors, singlesniff)) DMA.CH1.CTRLA     = 0b10000100;    // no repeat, 1 byte burst
     else DMA.CH1.CTRLA     = 0b10100100;                            // repeat, 1 byte burst
@@ -165,11 +177,12 @@ void Sniff(void) {
     if(M.CHDdecode==i2c) {
         print3x6(PSTR("I2C SNIFFER\nBIT0:SDA BIT1:SCL"));
         T.LOGIC.addr_ack_ptr =  T.LOGIC.data.I2C.addr_ack;
-        T.LOGIC.data_ptr = T.LOGIC.data.I2C.decoded;
         T.LOGIC.addr_ack_pos = 0x80;      // counter for keeping track of all bits
+        i2c_acc = 1; i2c_first = 1;       // as after a START
         PORTC.PIN0CTRL = (PORTC.PIN0CTRL & 0b11111000) | 0b00000010;    // Sense falling edge of SDA
-        PORTC.INTFLAGS = 0x03;  // Clear flags
-        PORTC.INTCTRL   = 0x03; // Enable PortC INT 0, High Priority
+        PORTC.PIN1CTRL = (PORTC.PIN1CTRL & 0b11111000) | 0b00000001;    // Sense rising edge of SCL
+        PORTC.INT0MASK = 0x02;  // INT0: SCL, a bit
+        PORTC.INT1MASK = 0x01;  // INT1: SDA, a START
     }
     else if(M.CHDdecode==rs232) {
         print3x6(PSTR("UART SNIFFER\nBIT2:RX BIT3:TX"));
@@ -213,6 +226,10 @@ void Sniff(void) {
         }
     }
     ConfigLogicDMA();
+    if(M.CHDdecode==i2c) {
+        PORTC.INTFLAGS = 0x03;  // Clear flags
+        PORTC.INTCTRL   = 0x0F; // Enable PortC INT 0 and INT 1, High Priority
+    }
     dma_display(); WaitDisplay();
     uint8_t armed=0;
     while((T.LOGIC.indrx==0) && (T.LOGIC.indtx==0)) {
@@ -221,6 +238,7 @@ void Sniff(void) {
             T.LOGIC.indrx=BUFFER_SERIAL-DMA.CH0.TRFCNT;
             T.LOGIC.indtx=BUFFER_SERIAL-DMA.CH1.TRFCNT;            
         }            
+        else T.LOGIC.indrx=BUFFER_I2C-DMA.CH1.TRFCNT;
         // Arm once, while SS is not asserted
         if(M.CHDdecode==spi && !armed) {
             if(testbit(VPORT2.IN, 4)) {     // SS not asserted
@@ -258,6 +276,13 @@ void Sniff(void) {
 		}
         // Display I2C data
         if(M.CHDdecode==i2c) {
+            uint16_t n=BUFFER_I2C-DMA.CH1.TRFCNT;
+            if(n!=T.LOGIC.indrx) ONGRN();       // activity (WaitDisplay() turns it off)
+            T.LOGIC.indrx=n;
+            if(testbit(Mcursors, singlesniff) && !testbit(DMA.CH1.CTRLA, 7)) {  // full
+                T.LOGIC.indrx=BUFFER_I2C;
+                setbit(MStatus, stop);
+            }
             if(testbit(Trigger, round)) {
                 if(T.LOGIC.indrx>=DATA_IN_PAGE_I2C) {
                     i=T.LOGIC.indrx-DATA_IN_PAGE_I2C;
@@ -355,7 +380,14 @@ void Sniff(void) {
             }
             else {                          // Restart Sniffer
                 if(M.CHDdecode==i2c) {
-                    PORTC.INTCTRL   = 0x03;     // Enable PortC INT 0, High Priority
+                    if(testbit(Mcursors, singlesniff)) {    // a new capture from the start
+                        T.LOGIC.addr_ack_ptr = T.LOGIC.data.I2C.addr_ack;
+                        T.LOGIC.addr_ack_pos = 0x80;
+                        T.LOGIC.data.I2C.addr_ack[0] = 0;
+                        i2c_acc = 1; i2c_first = 1;
+                    }
+                    PORTC.INTFLAGS  = 0x03;
+                    PORTC.INTCTRL   = 0x0F;     // Enable PortC INT 0 and INT 1, High Priority
                 }
                 else if(M.CHDdecode==rs232) {
                     USARTC0.CTRLB = 0x10;       // Enable RX
@@ -380,6 +412,9 @@ exitSniffer:
     TCC1.CTRLA = 0x00;      // Disable timer
     TCC1.CTRLD = 0x00;      // No restart on event (TCC1 counts post trigger samples next)
     PORTC.INTCTRL = 0x00;   // Disable PORTC interrupts
+    PORTC.INT0MASK  = 0x01; // PC0 (SDA) is the interrupt 0 source, as main() set it
+    PORTC.INT1MASK  = 0x80; // PC7 (SCK) is the interrupt 1 source
+    PORTC.PIN1CTRL &= 0b11111000;   // SCL: sense both edges again
     SPIC.CTRL = 0x00;       // Disable SPI
     PR.PRPC  = 0x7C;        // Stop: TWI, USART0, USART1, SPI, HIRES
     RTC.INTCTRL = 0x05;     // Re enable Time out interrupt
@@ -440,144 +475,235 @@ void DisplayData(uint8_t side, uint8_t page) {
     }    
 }
 
-#define SDA_PIN 0
-#define SCL_PIN 1
-#define SCL (unsigned char) (VPORT2.IN & _BV(SCL_PIN))
-#define SDA (unsigned char) (VPORT2.IN & _BV(SDA_PIN))
+// I2C and SPI MISO decoders: naked assembler, one short interrupt per bus edge.
+// The main loop runs between edges, so a long or continuous stream slows the
+// instrument down instead of locking it (Tester DUT SNIFF LOAD).
+//
+// I2C: INT0 = SCL (PC1) rising, one bit each; INT1 = SDA (PC0) falling, a START
+// when SCL is high. A bit is sampled ~10 cycles after its SCL edge (Fast-mode
+// guarantees >= 19 high). i2c_acc collects the bits behind a marker that reaches
+// C at the 8th; 0 means "the next clock is the ACK". The complete byte goes to
+// i2c_byte, which DMA CH1 copies into decoded[] (wrap or single sniff, as the
+// serial sniffers); the ACK clock adds the byte's two flags to addr_ack[].
+// i2c_first: 1 = the byte after a START (the address).
+// SPI: INT1 = SCK (PC7), one byte per interrupt (see the SPI notes below).
+// INT1 tells them apart by its pin mask: PC7 (SCK) is only in it for SPI.
 
-// Decode I2C (TWI) protocol
-// Temp.LOGIC.data.I2C.decoded[1024] holds data
-// Temp.LOGIC.data.I2C.addr_ack[257] hold if the byte is address or data and if the byte had an ack
-// Interrupt on falling edge of SDA
-ISR(PORTC_INT0_vect) {
-    uint8_t data;       // byte to accumulate data information
-    uint8_t bits;       // current bit being processed
-    uint8_t first=1;    // First data after start
-    uint8_t *dataptr=T.LOGIC.data_ptr;           // temp data pointer
-    uint8_t *bitsptr=T.LOGIC.addr_ack_ptr;       // temp bits pointer
-    uint8_t current_pos=T.LOGIC.addr_ack_pos;    // Current bit position in byte
-    const uint8_t *queue_max=T.LOGIC.data.I2C.decoded+1024;
-    TCC0.CNTL = 24;     // 1.024 second timeout
-    setbit(TCC0.INTFLAGS, TC2_LUNFIF_bp);    // Clear trigger timeout interrupt
-    ONGRN();
-repeated_start:
-    bits = 0;
-    // wait for SCL to fall
-    while(SCL) if(testbit(TCC0.INTFLAGS, TC2_LUNFIF_bp)) goto exiti2c;
-sample_bit:    // now ready for next bit of the byte
-    while(SCL == 0) if(testbit(TCC0.INTFLAGS, TC2_LUNFIF_bp)) goto exiti2c;  // wait for rising edge
-    // update buffers here
-    if (dataptr == queue_max) goto queue_is_full;
-    uint8_t dt = SDA;   // Sampling SDA on the rising edge of SCL
-    // we might not use this data in the cases of either stop or repeated start conditions
-    // SCL is now high, wait for either of two conditions: SCL falls or SDA changes
-    // split the cases to reduce the sub-loop overheads
-    if (dt == 0) {
-        // special case where stop condition might exist because data was zero
-look_for_bit_or_stop:
-        if(testbit(TCC0.INTFLAGS, TC2_LUNFIF_bp)) goto exiti2c;    // timeout
-        if (SCL == 0) goto process_bit;
-        if (SDA == 0) goto look_for_bit_or_stop;
-        if (SCL == 0) goto process_bit; // double check, in case both signals changed at the same time
-        // SCL and SDA are now high (stop condition occurred)
-        goto exiti2c;
-    }
-    else {
-        // special case where we might have a repeated start where SDA falls while SCL high
-look_for_bit_or_repeated_start:
-        if(testbit(TCC0.INTFLAGS, TC2_LUNFIF_bp)) goto exiti2c;    // timeout
-        if (SCL == 0) goto process_bit;
-        if (SDA) goto look_for_bit_or_repeated_start;
-        if (SCL == 0) goto process_bit; // double check, in case both signals changed at the same time
-        first=1;
-        goto repeated_start;
-    }
-process_bit:
-    // process another data bit
-    if (bits == 8) {
-        bits = 0;  // next SCL rise starts a new byte of data
-        // looking at the acknowledge bit
-        *dataptr++ = data;  // store the data
-
-        // addr/data bits and acknowledge bits are accumulated into a byte to save memory
-        // so, there are 4 addr/data and 4 ack/nack bits before we fill 1 byte
-        uint8_t bits;
-        bits=*bitsptr;
-
-        if(first) bits |= current_pos;
-        current_pos = current_pos>>1;
-        if(!dt) bits |= current_pos;   // Ack by pulling line low
-        current_pos = current_pos>>1;
-        *bitsptr=bits;
-        if (current_pos == 0) {  // 8 bits done
-            bitsptr++;
-            *bitsptr=0;
-            current_pos = 0x80;
-        }
-        first=0;    // subsequent bytes are data bytes
-    }
-    else {
-        // accumulate bits of the byte's information (MSB to LSB)
-        data = (data << 1) | dt;
-        bits++;
-    }
-    goto sample_bit;
-
-    // the program comes here when the memory is full
-queue_is_full:
-    // If single trigger, now go to stop
-    if(testbit(Mcursors, singlesniff)) {
-        PORTC.INTCTRL = 0x00;   // Disable PORTC interrupts
-        setbit(MStatus, stop);
-        T.LOGIC.indrx=BUFFER_I2C;
-        goto exiti2cb;
-    }
-    bitsptr=T.LOGIC.data.I2C.addr_ack;
-    *bitsptr=0;
-    dataptr=T.LOGIC.data.I2C.decoded;   // pointer to data
-    goto sample_bit;
-    
-exiti2c:
-    T.LOGIC.indrx=dataptr-T.LOGIC.data.I2C.decoded;
-exiti2cb:    
-    T.LOGIC.data_ptr=dataptr;
-    T.LOGIC.addr_ack_ptr=bitsptr;
-    T.LOGIC.addr_ack_pos=current_pos;
-    PORTC.INTFLAGS = 0x01;  // Clear rising edge interrupt
+ISR(PORTC_INT0_vect, ISR_NAKED) {     // I2C: SCL rose
+    asm volatile(
+    "     push  r24"                  "\n\t"
+    "     in    r24, %[vin]"          "\n\t"   /* SDA (bit 0) at the SCL edge */
+    "     push  r25"                  "\n\t"
+    "     in    r25, %[sreg]"         "\n\t"
+    "     push  r25"                  "\n\t"
+    "     lds   r25, %[acc]"          "\n\t"
+    "     tst   r25"                  "\n\t"
+    "     breq  5f"                   "\n\t"   /* the ACK clock */
+    "     lsl   r25"                  "\n\t"   /* C = the marker after the 8th bit */
+    "     sbrc  r24, 0"               "\n\t"
+    "     ori   r25, 1"               "\n\t"   /* (ORI leaves C alone) */
+    "     brcs  4f"                   "\n\t"
+    "     sts   %[acc], r25"          "\n\t"
+    // SDA sampled high and low now with SCL still high: a (repeated) START that
+    // came while this interrupt held INT1 off
+    "1:   sbrs  r24, 0"               "\n\t"
+    "     rjmp  9f"                   "\n\t"
+    "     sbic  %[vin], 0"            "\n\t"
+    "     rjmp  9f"                   "\n\t"
+    "     sbis  %[vin], 1"            "\n\t"
+    "     rjmp  9f"                   "\n\t"
+    "     ldi   r25, 1"               "\n\t"
+    "     sts   %[acc], r25"          "\n\t"
+    "     sts   %[first], r25"        "\n\t"
+    "9:   pop   r25"                  "\n\t"
+    "     out   %[sreg], r25"         "\n\t"
+    "     pop   r25"                  "\n\t"
+    "     pop   r24"                  "\n\t"
+    "     reti"                       "\n\t"
+    // the 8th bit: the byte to the DMA (no request while stopped), the ACK next
+    "4:   sts   %[byte], r25"         "\n\t"
+    "     ldi   r25, 0"               "\n\t"
+    "     sts   %[acc], r25"          "\n\t"
+    "     sbic  %[gpb], %[stp]"   "\n\t"
+    "     rjmp  1b"                   "\n\t"
+    "     lds   r25, %[dmaa]"         "\n\t"
+    "     ori   r25, 0x10"            "\n\t"   /* TRFREQ */
+    "     sts   %[dmaa], r25"         "\n\t"
+    "     rjmp  1b"                   "\n\t"
+    // the ACK clock (SDA low = ACK): the byte's address and ACK flags, two bits per
+    // byte, MSB first, four bytes to an addr_ack[] byte, wrapping with the DMA
+    "5:   push  r23"                  "\n\t"
+    "     push  r26"                  "\n\t"
+    "     push  r27"                  "\n\t"
+    "     lds   r25, %[dmaa]"         "\n\t"
+    "     sbrs  r25, 7"               "\n\t"   /* CH1 off: a single sniff is full */
+    "     rjmp  7f"                   "\n\t"
+    "     lds   r26, %[ptr]"          "\n\t"
+    "     lds   r27, %[ptr]+1"        "\n\t"
+    "     lds   r23, %[pos]"          "\n\t"
+    "     tst   r23"                  "\n\t"
+    "     brne  6f"                   "\n\t"
+    "     adiw  r26, 1"               "\n\t"   /* this addr_ack byte is full */
+    "     cpi   r26, lo8(%[aaend])"   "\n\t"
+    "     ldi   r25, hi8(%[aaend])"   "\n\t"
+    "     cpc   r27, r25"             "\n\t"
+    "     brne  2f"                   "\n\t"
+    "     ldi   r26, lo8(%[aa])"      "\n\t"
+    "     ldi   r27, hi8(%[aa])"      "\n\t"
+    "2:   ldi   r25, 0"               "\n\t"
+    "     st    X, r25"               "\n\t"
+    "     sts   %[ptr], r26"          "\n\t"
+    "     sts   %[ptr]+1, r27"        "\n\t"
+    "     ldi   r23, 0x80"            "\n\t"
+    "6:   ld    r25, X"               "\n\t"
+    "     bst   r24, 0"               "\n\t"   /* T = SDA: 1 = NACK */
+    "     lds   r24, %[first]"        "\n\t"
+    "     sbrc  r24, 0"               "\n\t"
+    "     or    r25, r23"             "\n\t"   /* an address */
+    "     lsr   r23"                  "\n\t"
+    "     brts  3f"                   "\n\t"
+    "     or    r25, r23"             "\n\t"   /* ACK */
+    "3:   lsr   r23"                  "\n\t"
+    "     st    X, r25"               "\n\t"
+    "     sts   %[pos], r23"          "\n\t"
+    "     ldi   r25, 0"               "\n\t"
+    "     sts   %[first], r25"        "\n\t"
+    "     ldi   r25, 1"               "\n\t"
+    "     sts   %[acc], r25"          "\n\t"
+    "8:   pop   r27"                  "\n\t"
+    "     pop   r26"                  "\n\t"
+    "     pop   r23"                  "\n\t"
+    "     rjmp  9b"                   "\n\t"
+    "7:   ldi   r25, 0"               "\n\t"   /* full: stop, as the old decoder did */
+    "     sts   %[intc], r25"         "\n\t"
+    "     sbi   %[gpb], %[stp]"   "\n\t"
+    "     rjmp  8b"                   "\n\t"
+    :
+    : [vin] "I" (_SFR_IO_ADDR(VPORT2_IN)), [sreg] "I" (_SFR_IO_ADDR(SREG)),
+      [gpb] "I" (_SFR_IO_ADDR(GPIOB)), [stp] "I" (stop),
+      [acc] "i" (&i2c_acc), [first] "i" (&i2c_first), [byte] "i" (&i2c_byte),
+      [dmaa] "i" (_SFR_MEM_ADDR(DMA_CH1_CTRLA)), [intc] "i" (_SFR_MEM_ADDR(PORTC_INTCTRL)),
+      [ptr] "i" (&T.LOGIC.addr_ack_ptr), [pos] "i" (&T.LOGIC.addr_ack_pos),
+      [aa] "i" (T.LOGIC.data.I2C.addr_ack), [aaend] "i" (T.LOGIC.data.I2C.addr_ack + BUFFER_I2C/4)
+    );
 }
 
-// Decode SPI protocol, SCK triggers this interrupt
-// Temp.LOGIC.addr_ack_pos holds data
-ISR(PORTC_INT1_vect) {
-    uint8_t data, i=8;
-    TCC0.CNTL = 2;      // Max 81.92ms timeout
-    setbit(TCC0.INTFLAGS, TC2_LUNFIF_bp);    // Clear trigger timeout interrupt
-
-    if(testbit(Sniffer,CPHA)) {    // CPHA == 1 - Sample on second edge
-        do {
-            // wait for clock rising
-            while(!testbit(VPORT2.IN, 7)) if(testbit(TCC0.INTFLAGS, TC2_LUNFIF_bp)) return;
-            data=data<<1;
-            // wait for clock falling
-            while(testbit(VPORT2.IN, 7)) if(testbit(TCC0.INTFLAGS, TC2_LUNFIF_bp)) return;
-            if(testbit(VPORT2.IN, 6)) data|=0x01; // Read MISO
-        } while(--i);
-
-    }
-    else {                  // CPHA == 0    - Sample on first edge
-        do {
-            // wait for clock rising
-            while(!testbit(VPORT2.IN, 7)) if(testbit(TCC0.INTFLAGS, TC2_LUNFIF_bp)) return;
-            data=data<<1;
-            if(testbit(VPORT2.IN, 6)) data|=0x01; // Read MISO
-            // wait for clock falling
-            while(testbit(VPORT2.IN, 7)) if(testbit(TCC0.INTFLAGS, TC2_LUNFIF_bp)) return;
-        } while(--i);
-    }
-    T.LOGIC.addr_ack_pos=data;      // data holder for DMA
-    PORTC.INTFLAGS = 0x02;      // Clear rising edge interrupt
-    // Save data on buffer
-    if(!testbit(MStatus, stop)) setbit(DMA.CH1.CTRLA,4);    // Transfer request
+// INT1: I2C START (SDA fell) or SPI MISO (SCK's first edge of a byte).
+// SPI: the first SCK edge of a byte raises the interrupt, so it is not waited for:
+// in CPHA 0 the bit it clocks is the port read at entry (~10 cycles after the edge),
+// in CPHA 1 the code goes straight to that edge's other half. Every wait is a
+// 5-cycle poll counting down a register; the TCC0 timeout is looked at every 256
+// polls. The byte is handed to DMA CH1 in a half period the code only waits through
+// (bit 8's high half in CPHA 0, its low half in CPHA 1). One byte per interrupt, on
+// purpose: staying in for the next byte decodes back to back to 800 kHz, but a
+// continuous SCK then holds the CPU for as long as it runs - no USB, no main loop to
+// show or stream the data, and a watchdog reset after 8 s.
+// Registers (SPI): r24 = port at the first edge, r23 = data, r22 = bits left,
+// r21 = countdown, r25 = scratch.
+ISR(PORTC_INT1_vect, ISR_NAKED) {
+    asm volatile(
+    "     push  r24"                  "\n\t"
+    "     in    r24, %[vin]"          "\n\t"   /* SPI: MISO; I2C: SCL when SDA fell */
+    "     push  r25"                  "\n\t"
+    "     lds   r25, %[i1mask]"       "\n\t"
+    "     sbrc  r25, 7"               "\n\t"   /* SCK (PC7) in the mask: SPI */
+    "     rjmp  30f"                  "\n\t"
+    "     sbrs  r24, 1"               "\n\t"   /* I2C: SCL low, a data change */
+    "     rjmp  39f"                  "\n\t"
+    "     ldi   r25, 1"               "\n\t"   /* SCL high: a (repeated) START */
+    "     sts   %[acc], r25"          "\n\t"
+    "     sts   %[first], r25"        "\n\t"
+    "39:  pop   r25"                  "\n\t"
+    "     pop   r24"                  "\n\t"
+    "     reti"                       "\n\t"
+    "30:  in    r25, %[sreg]"         "\n\t"
+    "     push  r25"                  "\n\t"
+    "     push  r21"                  "\n\t"
+    "     push  r22"                  "\n\t"
+    "     push  r23"                  "\n\t"
+    // Wait for SCK low / high: 5 cycles per poll; every 256 polls the TCC0 timeout
+#define SPI_WAIT(skip, n) \
+    n ":  " skip " %[vin], 7"    "\n\t" \
+    "     rjmp  " n "f"          "\n\t" \
+    "     dec   r21"             "\n\t" \
+    "     brne  " n "b"          "\n\t" \
+    "     lds   r25, 0x080C"     "\n\t"   /* TCC0.INTFLAGS */ \
+    "     sbrc  r25, 0"          "\n\t"   /* LUNFIF: timeout */ \
+    "     rjmp  99f"             "\n\t" \
+    "     rjmp  " n "b"          "\n\t" \
+    n ":"                        "\n\t"
+#define WAIT_LOW(n)  SPI_WAIT("sbis", n)    /* skip the exit while SCK is high */
+#define WAIT_HIGH(n) SPI_WAIT("sbic", n)    /* skip the exit while SCK is low  */
+    // Hand the byte to the DMA (addr_ack_pos, transfer request unless stopped),
+    // clear PORTC INT1 (a later rising edge re-enters) and restart the timeout
+#define SPI_STORE \
+    "     sts   %[aap], r23"     "\n\t" \
+    "     ldi   r25, 2"          "\n\t" \
+    "     sts   0x064C, r25"     "\n\t"   /* PORTC.INTFLAGS = INT1IF */ \
+    "     sts   0x0820, r25"     "\n\t"   /* TCC0.CNTL = 2: 81.92 ms */ \
+    "     ldi   r25, 1"          "\n\t" \
+    "     sts   0x080C, r25"     "\n\t"   /* clear LUNFIF */ \
+    "     sbic  %[gpb], %[stp]" "\n\t" \
+    "     rjmp  3f"              "\n\t" \
+    "     lds   r25, 0x0120"     "\n\t"   /* DMA.CH1.CTRLA |= TRFREQ */ \
+    "     ori   r25, 0x10"       "\n\t" \
+    "     sts   0x0120, r25"     "\n\t" \
+    "3:"                         "\n\t"
+    "     ldi   r25, 2"          "\n\t"
+    "     sts   0x0820, r25"     "\n\t"   /* TCC0.CNTL = 2: 81.92 ms */
+    "     ldi   r25, 1"          "\n\t"
+    "     sts   0x080C, r25"     "\n\t"   /* clear LUNFIF */
+    "     clr   r21"             "\n\t"
+    "     sbic  %[gpa], 7"       "\n\t"   /* Sniffer.CPHA */
+    "     rjmp  20f"             "\n\t"
+    // CPHA 0: sample on the first edge
+    "     bst   r24, 6"          "\n\t"   /* the first bit, read at the edge */
+    "     clr   r23"             "\n\t"
+    "     bld   r23, 0"          "\n\t"
+    "     ldi   r22, 7"          "\n\t"
+    "11:"                        "\n\t"
+    WAIT_LOW("4")
+    WAIT_HIGH("5")
+    "     lsl   r23"             "\n\t"
+    "     sbic  %[vin], 6"       "\n\t"   /* MISO */
+    "     ori   r23, 1"          "\n\t"
+    "     dec   r22"             "\n\t"
+    "     brne  11b"             "\n\t"
+    SPI_STORE                             /* in bit 8's high half */
+    WAIT_LOW("6")
+    "     rjmp  99f"             "\n\t"   /* one byte per interrupt */
+    // CPHA 1: sample on the second edge
+    "20:  clr   r23"             "\n\t"
+    "     ldi   r22, 8"          "\n\t"
+    "21:"                        "\n\t"
+    WAIT_LOW("7")
+    "     lsl   r23"             "\n\t"
+    "     sbic  %[vin], 6"       "\n\t"   /* MISO */
+    "     ori   r23, 1"          "\n\t"
+    "     dec   r22"             "\n\t"
+    "     breq  22f"             "\n\t"
+    WAIT_HIGH("8")
+    "     rjmp  21b"             "\n\t"
+    "22:"                        "\n\t"
+    SPI_STORE                             /* in bit 8's low half */
+    "99:  pop   r23"             "\n\t"
+    "     pop   r22"             "\n\t"
+    "     pop   r21"             "\n\t"
+    "     pop   r25"             "\n\t"
+    "     out   %[sreg], r25"    "\n\t"
+    "     pop   r25"             "\n\t"
+    "     pop   r24"             "\n\t"
+    "     reti"                  "\n\t"
+#undef SPI_WAIT
+#undef WAIT_LOW
+#undef WAIT_HIGH
+#undef SPI_STORE
+    :
+    : [vin] "I" (_SFR_IO_ADDR(VPORT2_IN)), [sreg] "I" (_SFR_IO_ADDR(SREG)),
+      [gpa] "I" (_SFR_IO_ADDR(GPIOA)), [gpb] "I" (_SFR_IO_ADDR(GPIOB)), [stp] "I" (stop),
+      [i1mask] "i" (_SFR_MEM_ADDR(PORTC_INT1MASK)), [aap] "i" (&T.LOGIC.addr_ack_pos),
+      [acc] "i" (&i2c_acc), [first] "i" (&i2c_first)
+    );
 }
 
 // Bit banging to decode the TX pin:
