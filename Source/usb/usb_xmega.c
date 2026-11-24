@@ -199,6 +199,9 @@ static inline void EVENT_USB_Device_ControlRequest(void) {
             return;
         }
         uint8_t n=ProcessCommand(req->bRequest, 1);    // Process command
+        // USB 2.0 9.3.5: on an input request a device must never return more data
+        // than the host asked for; it may return less.
+        if(n > req->wLength) n = req->wLength;
         USB_ep0_in_start(n);                // Send response
 	}
 }

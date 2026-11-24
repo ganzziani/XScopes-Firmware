@@ -2,7 +2,9 @@
 #include <avr/pgmspace.h>
 #include "bitmaps.h"
 
-// Gabotronics text
+// Gabotronics text (not in the TESTFIXTURE bench image: it is only drawn on the
+// settings screen, and the bytes pay for the bench-only code)
+#ifndef TESTFIXTURE
 const unsigned char Logo[] PROGMEM = {
     0x7E, 0xFF, 0x81, 0x91, 0x91, 0xF1, 0x60, 0x00,  // 0x0008
     0x60, 0xF4, 0x94, 0x94, 0xFC, 0xF8, 0x00, 0xFF,  // 0x0010
@@ -14,6 +16,7 @@ const unsigned char Logo[] PROGMEM = {
     0xFD, 0x00, 0x78, 0xFC, 0x84, 0x84, 0x84, 0x00,  // 0x0040
     0x98, 0xBC, 0xB4, 0xF4, 0x64,
 };
+#endif
 
 // Sprites, each byte pair represents next pixel relative position
 const int8_t TrigDown[] PROGMEM = { 0,2,  1,0, 1,1,  1,2,  1,3,  2,2, 255  }; // Falling trigger

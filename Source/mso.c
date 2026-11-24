@@ -2363,6 +2363,7 @@ void GoingtoMeter(void) {
 }
 
 uint8_t fft_stuff(uint8_t *p) {
+    T.SCOPE.Meter.fsrate = Srate;   // Every f this returns is the bin at this rate
     const int8_t *windowp;                              // Pointer to window table
     if(testbit(MFFT, hamming)) windowp=Hamming;         // Apply Hamming window
     else if(testbit(MFFT, hann)) windowp=Hann;          // Apply Hann window
@@ -2509,22 +2510,22 @@ static inline void Measurements(void) {
         avrg1+=calibrate;
 		calibrate=(int16_t)eeprom_read_word((uint16_t *)&offset16CH2);      // CH2 Offset Calibration
         avrg2+=calibrate;
-        T.SCOPE.Vdc[0]= avrg1>>5; // Exp. average: ((avrg1>>5)+Temp.IN.METER.Vdc[0])/2;
-        T.SCOPE.Vdc[1]= avrg2>>5; // Exp. average: ((avrg2>>5)+Temp.IN.METER.Vdc[1])/2;
+        T.SCOPE.Meter.Vdc[0]= avrg1>>5; // Exp. average: ((avrg1>>5)+Temp.IN.METER.Vdc[0])/2;
+        T.SCOPE.Meter.Vdc[1]= avrg2>>5; // Exp. average: ((avrg2>>5)+Temp.IN.METER.Vdc[1])/2;
         ADCA.CH1.CTRL = oldch1;
         ADCA.CH0.CTRL = oldch0;
         ADCA.PRESCALER = oldprescalea;
         ADCA.CTRLB = oldctrlba;
 cancelvdc:
-        printV(T.SCOPE.Vdc[0],0, CH1ctrl);
+        printV(T.SCOPE.Meter.Vdc[0],0, CH1ctrl);
         lcd_goto(64,2);
-        printV(T.SCOPE.Vdc[1],0, CH2ctrl);
+        printV(T.SCOPE.Meter.Vdc[1],0, CH2ctrl);
     }
     else if(testbit(MStatus,vp_p) && !testbit(MStatus,vdc)) {   // Display VPP
-        T.SCOPE.Vdc[0]=(int16_t)T.SCOPE.CH1.vpp*128;
-        T.SCOPE.Vdc[1]=(int16_t)T.SCOPE.CH2.vpp*128;
-                        printV(T.SCOPE.Vdc[0], M.CH1gain, CH1ctrl);
-        lcd_goto(64,2); printV(T.SCOPE.Vdc[1], M.CH2gain, CH2ctrl);
+        T.SCOPE.Meter.Vdc[0]=(int16_t)T.SCOPE.CH1.vpp*128;
+        T.SCOPE.Meter.Vdc[1]=(int16_t)T.SCOPE.CH2.vpp*128;
+                        printV(T.SCOPE.Meter.Vdc[0], M.CH1gain, CH1ctrl);
+        lcd_goto(64,2); printV(T.SCOPE.Meter.Vdc[1], M.CH2gain, CH2ctrl);
     }
     else {                          // Measure frequency
         // TCC1:Lo16 TCE0:Hi16 TCC0:Timer
@@ -2585,7 +2586,7 @@ cancelvdc:
         freqv = (freqv<<16) + TCC1.CCA;
         setbit(Misc,negative);
         printF(8,5,freqv);          // Print count
-        T.SCOPE.MeterFreq = freqv;
+        T.SCOPE.Meter.MeterFreq = freqv;
         clrbit(Misc,negative);
 cancelfreq:
         // End
@@ -2594,6 +2595,9 @@ cancelfreq:
             setbit(MStatus, updatemso); // Frequency measure mode, reset MSO
         }
     }
+    T.SCOPE.Meter.gain1 = M.CH1gain;    // The settings that produced the value
+    T.SCOPE.Meter.gain2 = M.CH2gain;
+    T.SCOPE.Meter.srate = Srate;
     clrbit(Misc,bigfont);
 }
 
@@ -2789,6 +2793,11 @@ void Apply(void) {
     TCE0.CTRLA = 0;		    // TCE0 controls Interrupt ADC, srate: 6, 7, 8, 9, 10 and fixed value for slow sampling
     TCE0.CTRLB = 0;
     TCE0.INTCTRLA = 0;
+    // Slow sampling state lives in the TempData union: start it clean
+    T.SCOPE.slow_count = 0;
+    T.SCOPE.slow_sum1 = 0;
+    T.SCOPE.slow_sum2 = 0;
+    T.SCOPE.slow_first = 1;
     TCC1.CTRLA = 0;
     TCC1.CTRLB = 0;
     // TCC0 controls the auto trigger and auto key repeat
@@ -2887,17 +2896,19 @@ ISR(TCE0_OVF_vect) {
     // Acquire
     ch1 = ADCA.CH0.RESL;
     ch2 = ADCA.CH1.RESL;
-    // Derivative
-    if(testbit(CH1ctrl,derivative)) {
-        uint8_t prev=ch1;
-        ch1 = ch1 - T.SCOPE.slow_prev1;
-        T.SCOPE.slow_prev1=prev;
+    // Derivative: the change since the previous sample. The previous sample is kept
+    // with the derivative off too, so turning it on never uses a stale one; the first
+    // sample after Apply() has none and is its own previous (reads 0)
+    uint8_t raw1=ch1, raw2=ch2;
+    if(T.SCOPE.slow_first) {
+        T.SCOPE.slow_first=0;
+        T.SCOPE.slow_prev1=raw1;
+        T.SCOPE.slow_prev2=raw2;
     }
-    if(testbit(CH2ctrl,derivative)) {
-        uint8_t prev=ch2;
-        ch2 = ch2 - T.SCOPE.slow_prev2;
-        T.SCOPE.slow_prev2=prev;
-    }
+    if(testbit(CH1ctrl,derivative)) ch1 -= T.SCOPE.slow_prev1;
+    if(testbit(CH2ctrl,derivative)) ch2 -= T.SCOPE.slow_prev2;
+    T.SCOPE.slow_prev1=raw1;
+    T.SCOPE.slow_prev2=raw2;
     // Offset
     ch1 = saddwsat(ch1,T.SCOPE.CH1.offset);
     ch2 = saddwsat(ch2,T.SCOPE.CH2.offset);

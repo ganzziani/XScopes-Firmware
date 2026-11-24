@@ -5,8 +5,9 @@
 #include "mygccdef.h"
 
 // From Application Note AVR1003
+// Only the I bit is restored: the other SREG bits don't survive a call anyway
 void CCPWrite( volatile uint8_t * address, uint8_t value ) {
-    uint8_t volatile saved_sreg = SREG;
+    uint8_t ints_on = testbit(SREG, CPU_I_bp);
     cli();
     #ifdef __ICCAVR__
     asm("movw r30, r16");
@@ -38,7 +39,7 @@ void CCPWrite( volatile uint8_t * address, uint8_t value ) {
     : "r16", "r30", "r31"
     );
     #endif
-    SREG = saved_sreg;
+    if(ints_on) sei();
 }
 
 // Converts an uint to int, then returns the half

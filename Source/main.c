@@ -246,7 +246,9 @@ int main(void) {
         Volt = ADCA.CH3.RESL;
         printF(64,4,(uint32_t)Volt*3248);     // Convert to volts (V * 2.0625*2/127)
 //        send(VPORT2.IN);            // Send logic port data to serial port
+#ifndef TESTFIXTURE
         memcpy_P(Disp_send.display_data+30,  &Logo, 69);   // Print Gabotronics, top center
+#endif
         tiny_printp(50,1,VERSION);
         if(CLK.CTRL & CLK_SCLKSEL_RC32M_gc) {   // Clock error?
             tiny_printp(0,7,PSTR("NO XT"));

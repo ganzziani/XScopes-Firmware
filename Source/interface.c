@@ -240,8 +240,8 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
             if(index==0 && Srate>10) clrbit(MStatus, triggered);    // prevents bad wave when changing from 20 to 10ms/div
             if(index<=5 || index==35 || index==38 || index==12 || index==13 ||
             (index>=24 && index<=28))  setbit(MStatus, update);      // Changing trigger
-            T.SCOPE.MeterFreq = 0;              // Any write invalidates the cached meter reading
-            if(index<=13 || index==28) {        // Only settings that need Apply()
+            T.SCOPE.Meter.MeterFreq = 0;        // Any write invalidates the cached meter reading
+            if(index<=13 || index==28) {        // Only settings that need Apply() (28: Ttimeout)
                 setbit(MStatus, updatemso);		// Settings are changing
             }
             if(index>=36) setbit(MStatus, updateawg);
@@ -300,20 +300,15 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
             setbit(MStatus, updatemso);     // Apply settings
             setbit(MStatus, updateawg);     // Generate wave                       
         break;
-        case 'm':   // Send METER measurement
-            p = (uint8_t *)(&T.SCOPE.MeterFreq);
-            for(uint8_t i=0; i<4; i++) ep0_buf_in[i]=*p++;
-            p = (uint8_t *)(&T.SCOPE.CH1);
-            for(uint8_t i=4; i<4+sizeof(T.SCOPE.CH1)+sizeof(T.SCOPE.CH2); i++) ep0_buf_in[i]=*p++;
-            // The PC needs the timebase, the auto-setup state and the gains that
-            // produced those readings: the meter restarts its auto-setup for every
-            // measurement, and reading these separately races it. adjusting==0 marks
-            // the settled reading the device itself displays.
-            ep0_buf_in[14] = Srate;
-            ep0_buf_in[15] = T.SCOPE.adjusting;
-            ep0_buf_in[16] = M.CH1gain;
-            ep0_buf_in[17] = M.CH2gain;
-            n=18;
+        case 'm':   // Send METER measurement: the value with the gains and rate it
+                    // was measured at, then CH1/CH2's statistics and f (fsrate is f's
+                    // rate) and the auto-setup state. T.SCOPE.Meter is one block, so
+                    // no value is ever paired with a separately read setting.
+            p = (uint8_t *)(&T.SCOPE.Meter);   // Meter, then CH1/CH2 (one block)
+            for(i=0; i<sizeof(T.SCOPE.Meter)+sizeof(T.SCOPE.CH1)+sizeof(T.SCOPE.CH2); i++)
+                ep0_buf_in[i]=*p++;
+            ep0_buf_in[i++] = T.SCOPE.adjusting;
+            n=i;
         break;
         case 'p': clrbit(Misc,autosend); break;    // Do not automatically send data to UART
         case 'q': setbit(Misc,autosend); break;    // Automatically send data to UART

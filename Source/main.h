@@ -187,11 +187,24 @@ typedef union {
                 int8_t      TempCH1[512];		// CH1 Temp data
                 int8_t      TempCH2[512];		// CH2 Temp data
                 uint8_t     TempCHD[512];       // CHD Temp data
-                union {
-                    int16_t Vdc[2];         // Channel 1 and Channel 2 DC
-                    uint32_t MeterFreq;
-                };
             };
+        };
+        // The meter reading and the settings that produced it, stamped where the
+        // value or f is computed ('m' sends it in one contiguous block): a host
+        // never pairs a number with a separately read Srate or gain, which the
+        // auto-setup changes between measurements. gain1/gain2/srate are stamped
+        // in Measurements() with the value; fsrate in the pass that computes f.
+        struct {
+            union {
+                int16_t Vdc[2];         // Channel 1 and Channel 2 DC
+                uint32_t MeterFreq;
+            };
+            uint8_t gain1, gain2, srate, fsrate;
+        } Meter;
+        // Next to Meter so 'm' sends the whole reading in one copy (interface.c)
+        struct {
+            ACHANNEL CH1;                   // Analog Channel 1
+            ACHANNEL CH2;                   // Analog Channel 2
         };
         uint8_t  adjusting;                 // Auto setup adjusting step
         uint16_t slowval;                   // Slow sampling rate time value
@@ -200,12 +213,9 @@ typedef union {
         uint32_t slow_sum2;
         uint8_t slow_prev1;                 // Previous samples for the derivative
         uint8_t slow_prev2;
+        uint8_t slow_first;                 // Set by Apply(): next sample has no previous one
         uint8_t old_s, old_g1, old_g2;      // sampling, gains before entering meter mode
         uint8_t shortcuti;                  // shortcut index
-        struct {
-            ACHANNEL CH1;                   // Analog Channel 1
-            ACHANNEL CH2;                   // Analog Channel 2
-        };            
         SCOPE_DATA DC;                      // Data samples
     } SCOPE;
     struct {

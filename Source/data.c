@@ -125,7 +125,7 @@ const uint8_t MAXM[] PROGMEM = {   // Flash Copy
     255,    //  thold;          //
     0xFF,   //  Tpost low byte  // Max Post Trigger 0x7FFF
     0x7F,   //  Tpost high byte
-    10,     //  Tsource;        // 10 Trigger sources
+    10,     //  Tsource;        // 11 Trigger sources
     252,    //  Tlevel;         // Max Trigger Level
     255,    //  Window1;        //
     255,    //  Window2;        //
@@ -138,7 +138,7 @@ const uint8_t MAXM[] PROGMEM = {   // Flash Copy
     255,    //  Sweep2;         //
     127,    //  SWSpeed;        // Sweep Speed Max
     255,    //  AWGamp;         //
-    5,      //  AWGtype;        // 5 waveform type
+    5,      //  AWGtype;        // 6 waveform types
     255,    //  AWGduty;        //
     255,    //  AWGoffset;      //
 };
