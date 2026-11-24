@@ -148,8 +148,8 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
     RTC.CNT=0;  // Clear screen saver timer    
     OFFGRN();   // In case the LED was on
     // Commands that read or send on USARTE0 run for the serial port only: over USB they
-    // would block the control request on the UART (CR-039), and with autosend on that can
-    // starve the main loop into a watchdog reset (CR-045). Their replies go to the UART
+    // would block the control request on the UART, and with autosend on that can
+    // starve the main loop into a watchdog reset. Their replies go to the UART
     // anyway, so a USB host has no use for them: it reads SCOPE_DATA, and the sniffer's
     // decoded buffers while Sniff() runs, from bulk endpoint 1.
     if(!usb) switch(Command) {
@@ -302,8 +302,7 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
         break;
         case 'm':   // Send METER measurement: the value with the gains and rate it
                     // was measured at, then CH1/CH2's statistics and f (fsrate is f's
-                    // rate) and the auto-setup state. T.SCOPE.Meter is one block, so
-                    // no value is ever paired with a separately read setting.
+                    // rate) and the auto-setup state
             p = (uint8_t *)(&T.SCOPE.Meter);   // Meter, then CH1/CH2 (one block)
             for(i=0; i<sizeof(T.SCOPE.Meter)+sizeof(T.SCOPE.CH1)+sizeof(T.SCOPE.CH2); i++)
                 ep0_buf_in[i]=*p++;

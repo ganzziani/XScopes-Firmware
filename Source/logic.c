@@ -93,9 +93,6 @@ const uint16_t TCC1val[8] PROGMEM = {
     277,    // 115200
 };
 
-// I2C decoder state, kept by the interrupts below (see there)
-static volatile uint8_t i2c_acc, i2c_first, i2c_byte;
-
 void ConfigLogicDMA(void) {
     setbit(DMA.CH0.CTRLA,6);    // reset DMA CH0
     setbit(DMA.CH1.CTRLA,6);    // reset DMA CH1
@@ -146,8 +143,8 @@ void ConfigLogicDMA(void) {
         DMA.CH1.TRFCNT    = BUFFER_I2C;
         DMA.CH1.DESTADDR0 = (((uint16_t) T.LOGIC.data.I2C.decoded)     ) & 0xFF;
         DMA.CH1.DESTADDR1 = (((uint16_t) T.LOGIC.data.I2C.decoded)>>1*8) & 0xFF;
-        DMA.CH1.SRCADDR0  = (((uint16_t)(&i2c_byte))     ) & 0xFF;
-        DMA.CH1.SRCADDR1  = (((uint16_t)(&i2c_byte))>>1*8) & 0xFF;
+        DMA.CH1.SRCADDR0  = (((uint16_t)(&T.LOGIC.i2c_byte))     ) & 0xFF;
+        DMA.CH1.SRCADDR1  = (((uint16_t)(&T.LOGIC.i2c_byte))>>1*8) & 0xFF;
     }
     else {
         DMA.CH1.TRFCNT    = BUFFER_SERIAL;            // buffer size
@@ -178,7 +175,7 @@ void Sniff(void) {
         print3x6(PSTR("I2C SNIFFER\nBIT0:SDA BIT1:SCL"));
         T.LOGIC.addr_ack_ptr =  T.LOGIC.data.I2C.addr_ack;
         T.LOGIC.addr_ack_pos = 0x80;      // counter for keeping track of all bits
-        i2c_acc = 1; i2c_first = 1;       // as after a START
+        T.LOGIC.i2c_acc = 1; T.LOGIC.i2c_first = 1;       // as after a START
         PORTC.PIN0CTRL = (PORTC.PIN0CTRL & 0b11111000) | 0b00000010;    // Sense falling edge of SDA
         PORTC.PIN1CTRL = (PORTC.PIN1CTRL & 0b11111000) | 0b00000001;    // Sense rising edge of SCL
         PORTC.INT0MASK = 0x02;  // INT0: SCL, a bit
@@ -384,7 +381,7 @@ void Sniff(void) {
                         T.LOGIC.addr_ack_ptr = T.LOGIC.data.I2C.addr_ack;
                         T.LOGIC.addr_ack_pos = 0x80;
                         T.LOGIC.data.I2C.addr_ack[0] = 0;
-                        i2c_acc = 1; i2c_first = 1;
+                        T.LOGIC.i2c_acc = 1; T.LOGIC.i2c_first = 1;
                     }
                     PORTC.INTFLAGS  = 0x03;
                     PORTC.INTCTRL   = 0x0F;     // Enable PortC INT 0 and INT 1, High Priority
@@ -481,11 +478,11 @@ void DisplayData(uint8_t side, uint8_t page) {
 //
 // I2C: INT0 = SCL (PC1) rising, one bit each; INT1 = SDA (PC0) falling, a START
 // when SCL is high. A bit is sampled ~10 cycles after its SCL edge (Fast-mode
-// guarantees >= 19 high). i2c_acc collects the bits behind a marker that reaches
+// guarantees >= 19 high). T.LOGIC.i2c_acc collects the bits behind a marker that reaches
 // C at the 8th; 0 means "the next clock is the ACK". The complete byte goes to
-// i2c_byte, which DMA CH1 copies into decoded[] (wrap or single sniff, as the
+// T.LOGIC.i2c_byte, which DMA CH1 copies into decoded[] (wrap or single sniff, as the
 // serial sniffers); the ACK clock adds the byte's two flags to addr_ack[].
-// i2c_first: 1 = the byte after a START (the address).
+// T.LOGIC.i2c_first: 1 = the byte after a START (the address).
 // SPI: INT1 = SCK (PC7), one byte per interrupt (see the SPI notes below).
 // INT1 tells them apart by its pin mask: PC7 (SCK) is only in it for SPI.
 
@@ -496,6 +493,11 @@ ISR(PORTC_INT0_vect, ISR_NAKED) {     // I2C: SCL rose
     "     push  r25"                  "\n\t"
     "     in    r25, %[sreg]"         "\n\t"
     "     push  r25"                  "\n\t"
+    // An SDA fall still pending at this SCL rise came while SCL was low: a data
+    // change, not a START. Its INT1 must not run now, with SCL high: behind the ACK
+    // path it would, and restart the byte (the fall is ~1 bit before this rise)
+    "     ldi   r25, 2"               "\n\t"
+    "     sts   %[intf], r25"         "\n\t"   /* PORTC.INTFLAGS = INT1IF */
     "     lds   r25, %[acc]"          "\n\t"
     "     tst   r25"                  "\n\t"
     "     breq  5f"                   "\n\t"   /* the ACK clock */
@@ -531,13 +533,14 @@ ISR(PORTC_INT0_vect, ISR_NAKED) {     // I2C: SCL rose
     "     sts   %[dmaa], r25"         "\n\t"
     "     rjmp  1b"                   "\n\t"
     // the ACK clock (SDA low = ACK): the byte's address and ACK flags, two bits per
-    // byte, MSB first, four bytes to an addr_ack[] byte, wrapping with the DMA
+    // byte, MSB first, four bytes to an addr_ack[] byte, wrapping with the DMA. Only
+    // this byte's two bits are cleared and set: after a wrap the rest of its addr_ack
+    // byte still holds the flags of three older bytes in the buffer. A single sniff
+    // stops after the flags of the byte that filled it (CH1 turns itself off on it)
     "5:   push  r23"                  "\n\t"
     "     push  r26"                  "\n\t"
     "     push  r27"                  "\n\t"
-    "     lds   r25, %[dmaa]"         "\n\t"
-    "     sbrs  r25, 7"               "\n\t"   /* CH1 off: a single sniff is full */
-    "     rjmp  7f"                   "\n\t"
+    "     bst   r24, 0"               "\n\t"   /* T = SDA: 1 = NACK */
     "     lds   r26, %[ptr]"          "\n\t"
     "     lds   r27, %[ptr]+1"        "\n\t"
     "     lds   r23, %[pos]"          "\n\t"
@@ -550,13 +553,15 @@ ISR(PORTC_INT0_vect, ISR_NAKED) {     // I2C: SCL rose
     "     brne  2f"                   "\n\t"
     "     ldi   r26, lo8(%[aa])"      "\n\t"
     "     ldi   r27, hi8(%[aa])"      "\n\t"
-    "2:   ldi   r25, 0"               "\n\t"
-    "     st    X, r25"               "\n\t"
-    "     sts   %[ptr], r26"          "\n\t"
+    "2:   sts   %[ptr], r26"          "\n\t"
     "     sts   %[ptr]+1, r27"        "\n\t"
     "     ldi   r23, 0x80"            "\n\t"
     "6:   ld    r25, X"               "\n\t"
-    "     bst   r24, 0"               "\n\t"   /* T = SDA: 1 = NACK */
+    "     mov   r24, r23"             "\n\t"
+    "     lsr   r24"                  "\n\t"
+    "     or    r24, r23"             "\n\t"   /* this byte's two bits */
+    "     com   r24"                  "\n\t"
+    "     and   r25, r24"             "\n\t"   /* cleared: an old byte's, after a wrap */
     "     lds   r24, %[first]"        "\n\t"
     "     sbrc  r24, 0"               "\n\t"
     "     or    r25, r23"             "\n\t"   /* an address */
@@ -570,6 +575,9 @@ ISR(PORTC_INT0_vect, ISR_NAKED) {     // I2C: SCL rose
     "     sts   %[first], r25"        "\n\t"
     "     ldi   r25, 1"               "\n\t"
     "     sts   %[acc], r25"          "\n\t"
+    "     lds   r25, %[dmaa]"         "\n\t"
+    "     sbrs  r25, 7"               "\n\t"   /* CH1 off: this byte filled a single sniff */
+    "     rjmp  7f"                   "\n\t"
     "8:   pop   r27"                  "\n\t"
     "     pop   r26"                  "\n\t"
     "     pop   r23"                  "\n\t"
@@ -581,8 +589,9 @@ ISR(PORTC_INT0_vect, ISR_NAKED) {     // I2C: SCL rose
     :
     : [vin] "I" (_SFR_IO_ADDR(VPORT2_IN)), [sreg] "I" (_SFR_IO_ADDR(SREG)),
       [gpb] "I" (_SFR_IO_ADDR(GPIOB)), [stp] "I" (stop),
-      [acc] "i" (&i2c_acc), [first] "i" (&i2c_first), [byte] "i" (&i2c_byte),
+      [acc] "i" (&T.LOGIC.i2c_acc), [first] "i" (&T.LOGIC.i2c_first), [byte] "i" (&T.LOGIC.i2c_byte),
       [dmaa] "i" (_SFR_MEM_ADDR(DMA_CH1_CTRLA)), [intc] "i" (_SFR_MEM_ADDR(PORTC_INTCTRL)),
+      [intf] "i" (_SFR_MEM_ADDR(PORTC_INTFLAGS)),
       [ptr] "i" (&T.LOGIC.addr_ack_ptr), [pos] "i" (&T.LOGIC.addr_ack_pos),
       [aa] "i" (T.LOGIC.data.I2C.addr_ack), [aaend] "i" (T.LOGIC.data.I2C.addr_ack + BUFFER_I2C/4)
     );
@@ -609,6 +618,9 @@ ISR(PORTC_INT1_vect, ISR_NAKED) {
     "     sbrc  r25, 7"               "\n\t"   /* SCK (PC7) in the mask: SPI */
     "     rjmp  30f"                  "\n\t"
     "     sbrs  r24, 1"               "\n\t"   /* I2C: SCL low, a data change */
+    "     rjmp  39f"                  "\n\t"
+    "     lds   r25, %[intf]"         "\n\t"   /* SCL high, but its rise not served yet: */
+    "     sbrc  r25, 0"               "\n\t"   /* SDA fell before it, a data change */
     "     rjmp  39f"                  "\n\t"
     "     ldi   r25, 1"               "\n\t"   /* SCL high: a (repeated) START */
     "     sts   %[acc], r25"          "\n\t"
@@ -702,7 +714,8 @@ ISR(PORTC_INT1_vect, ISR_NAKED) {
     : [vin] "I" (_SFR_IO_ADDR(VPORT2_IN)), [sreg] "I" (_SFR_IO_ADDR(SREG)),
       [gpa] "I" (_SFR_IO_ADDR(GPIOA)), [gpb] "I" (_SFR_IO_ADDR(GPIOB)), [stp] "I" (stop),
       [i1mask] "i" (_SFR_MEM_ADDR(PORTC_INT1MASK)), [aap] "i" (&T.LOGIC.addr_ack_pos),
-      [acc] "i" (&i2c_acc), [first] "i" (&i2c_first)
+      [acc] "i" (&T.LOGIC.i2c_acc), [first] "i" (&T.LOGIC.i2c_first),
+      [intf] "i" (_SFR_MEM_ADDR(PORTC_INTFLAGS))
     );
 }
 

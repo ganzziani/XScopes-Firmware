@@ -245,6 +245,10 @@ typedef union {
         uint8_t *data_ptr;
         uint8_t addr_ack_pos;       // counter for keeping track of all bits / location for DMA
         uint16_t baud;              // Baud rate
+        // I2C decoder state (logic.c, PORTC ISRs): set at every sniffer start
+        volatile uint8_t i2c_acc;   // bits of the byte in progress, behind a marker bit
+        volatile uint8_t i2c_first; // 1 = the byte after a START (the address)
+        volatile uint8_t i2c_byte;  // last decoded byte, DMA CH1's source
     } LOGIC;
 } TempData;
 
