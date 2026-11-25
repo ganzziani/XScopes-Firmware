@@ -2931,9 +2931,9 @@ ISR(TCE0_OVF_vect) {
     T.SCOPE.slow_sum2+=ch2;
 
     T.SCOPE.slow_count++;
-    setbit(Misc,slowacq);
     if(T.SCOPE.slow_count>=T.SCOPE.slowval) {
         T.SCOPE.slow_count=0;
+        setbit(Misc,slowacq);   // A new sample: send the buffer to USB (once per sample, not per tick)
         // Average
         if(testbit(CH1ctrl,chaverage)) ch1=T.SCOPE.slow_sum1/T.SCOPE.slowval;
         if(testbit(CH2ctrl,chaverage)) ch2=T.SCOPE.slow_sum2/T.SCOPE.slowval;
