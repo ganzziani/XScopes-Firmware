@@ -2080,9 +2080,9 @@ checknext:
                     {
                         uint32_t Numerator = cycles*(F_CPU/256)*100;
                         if(M.AWGdesiredF<100000) {
-                            uint32_t Denominator = TCD1.PER; 
-                            if(TCD1.CTRLA != 0x01) Denominator*=256;
-                            printF(0,TEXT_LAST_LINE,(Numerator/(Denominator+1))*1000);
+                            uint32_t Denominator = TCD1.PER+1;          // Timer counts per sample
+                            if(TCD1.CTRLA != 0x01) Denominator*=256;    // Prescaler 256
+                            printF(0,TEXT_LAST_LINE,(Numerator/Denominator)*1000);
                             print3x6(STR_KHZ+1);   // "HZ"
                         }
                         else {
