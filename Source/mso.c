@@ -2372,6 +2372,11 @@ uint8_t fft_stuff(uint8_t *p) {
         windowp=Blackman;           // Assign valid pointer (at no flash cost)
         setbit(Misc, bigfont);		// Temporally use this bit for "no window"
     }
+    // Read the buffer oldest sample first, from Index. In roll mode the buffer is circular:
+    // read from 0, the jump between the newest and oldest samples moved through the window
+    // once per buffer, and the peak widened and narrowed with where the window weighted it.
+    // A slow sweep is read in time order too, and Index is 0 at the fast rates (Apply()).
+    uint8_t n = Index;
     if(testbit(MFFT,iqfft)) {
         const uint8_t *p1 = T.SCOPE.DC.CH1data;             // Pointer to ch1 data
         const uint8_t *p2 = T.SCOPE.DC.CH2data;		        // Pointer to ch2 data
@@ -2382,8 +2387,8 @@ uint8_t fft_stuff(uint8_t *p) {
 		    if(testbit(Misc,bigfont)) w=127;        // No window
 		    if(i<127) windowp++;                    // Window symmetry
             if(i>127) windowp--;                    // (only stored half of window)
-            ch1=(int8_t)((*p1++)-128);              // Convert to signed char
-            ch2=(int8_t)((*p2++)-128);              // Convert to signed char
+            ch1=(int8_t)(p1[n]-128);                // Convert to signed char
+            ch2=(int8_t)(p2[n++]-128);              // Convert to signed char
             T.SCOPE.FFT.bfly[i].r=FMULS(ch1, w);
 		    T.SCOPE.FFT.bfly[i].i=FMULS(ch2, w);
         } while (++i);
@@ -2396,7 +2401,7 @@ uint8_t fft_stuff(uint8_t *p) {
 		    if(testbit(Misc,bigfont)) w=127;        // No window
 		    if(i<127) windowp++;                    // Window symmetry
 		    if(i>127) windowp--;                    // (only stored half of window)
-            ch=(int8_t)((*p++)-128);                // Convert to signed char
+            ch=(int8_t)(p[n++]-128);                // Convert to signed char
             T.SCOPE.FFT.bfly[i].r=(signed int)(FMULS8(ch, w)*256);
             T.SCOPE.FFT.bfly[i].i=0;                // Real input only
         } while (++i);
