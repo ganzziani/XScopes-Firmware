@@ -7,6 +7,7 @@
 #include "display.h"
 #include "awg.h"
 #include "interface.h"
+#include "utils.h"
 #include "usb\usb_xmega.h"
 
 #define SOH     0x01    // start of heading
@@ -316,9 +317,13 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
             p=(uint8_t *)&M; for(; i<44; i++) ep0_buf_in[i]=*p++;   // M
             n=44;
         break;
-		case 0xBB: // disconnect from USB, jump to bootloader. USB only: the bootloader has no
+		case 0xBB: // disconnect from USB, start the DFU bootloader. USB only: the bootloader has no
                    // serial interface, so a stray 0xBB on the UART must not leave the device
                    // in a mode the PC cannot reach it in.
+                   // This runs inside the USB interrupt, so it must not jump away: the PMIC would
+                   // keep that level "executing" and block every low and medium interrupt (the
+                   // device froze off USB until a reset). A watchdog reset starts clean instead,
+                   // and main() passes the chip to the bootloader (see BOOT_KEY).
             if(!usb) break;
             // USB_ep0_wait_for_complete
 			USB_ep0_in_start(0);
@@ -328,10 +333,12 @@ uint8_t ProcessCommand(uint8_t Command, uint8_t usb) {
 			delay_ms(10);
 			USB.CTRLB &= ~USB_ATTACH_bm;    // disconnects the device from the USB lines
 			delay_ms(100);
-			RST.STATUS = 0xFF;      // Clear reset flags to signal bootloader
-			void (*enter_bootloader)(void) = (void*) 0x4000; /*0x8000/2*/ //(void*) 0x47fc /*0x8ff8/2*/;
-			enter_bootloader();
-		break;        
+			RST.STATUS = 0xFF;      // Clear reset flags: a software reset flag sends the bootloader to the app
+			BootKey = BOOT_KEY;
+			while(WDT.STATUS & WDT_SYNCBUSY_bm);
+			CCPWrite(&WDT.CTRL, WDT_PER_8CLK_gc | WDT_ENABLE_bm | WDT_CEN_bm);  // Watchdog reset in ~8 ms
+			for(;;);
+		break;
     }
     return n;
 }

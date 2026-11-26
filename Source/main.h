@@ -292,4 +292,9 @@ typedef struct {
 extern TempData T;
 extern NVMVAR M;
 
+// DFU request (USB command 0xBB): the command stores BOOT_KEY and lets the watchdog reset the
+// chip; main() then hands the fresh chip to the bootloader. Not cleared by the C startup.
+#define BOOT_KEY    0xB007
+extern uint16_t BootKey;
+
 #endif

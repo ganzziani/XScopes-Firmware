@@ -41,7 +41,9 @@
 #ifndef DEVICE_CODE
 #error "hardware.h must define DEVICE_CODE (USB bcdDevice low byte)"
 #endif
-#define DESCRIPTOR_REV          0x01
+// bcdDevice high byte. 0x02: the 0xBB command starts the DFU bootloader (older firmware froze
+// off USB until a reset), so the PC application can send it.
+#define DESCRIPTOR_REV          0x02
 
 /** Device descriptor structure. This descriptor, located in FLASH memory, describes the overall
  *  device characteristics, including the supported USB version, control endpoint size and the

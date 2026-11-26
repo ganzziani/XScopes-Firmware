@@ -107,7 +107,18 @@ static inline void LoadEE(void);                  // Load settings from EEPROM
 void CalibrateOffset(void);
 void CalibrateGain(void);
 
+uint16_t BootKey __attribute__((section(".noinit")));     // see BOOT_KEY
+
 int main(void) {
+    // DFU requested (0xBB): the chip comes out of the watchdog reset as the bootloader expects it
+    // after a reset with K1 held. Atmel's boot_process (the bootloader's entry at 0x8000) writes
+    // R15 to PORTA.DIR before it reads K1 (PA4): R15 = 0x10 makes PA4 an output driving low
+    // (PORTA.OUT is 0 after a reset), as if K1 were pressed. Jumping there from the running
+    // application instead leaves the PMIC level, DMA, timers and clocks set and is unreliable.
+    if(BootKey == BOOT_KEY && (RST.STATUS & RST_WDRF_bm)) {
+        BootKey = 0;
+        asm volatile("ldi r24, 0x10\n\t mov r15, r24\n\t jmp 0x8000" ::: "r24", "r15");
+    }
     // Clock Settings
 	// USB Clock
 	OSC.DFLLCTRL = OSC_RC32MCREF_USBSOF_gc; // Configure DFLL for 48MHz, calibrated by USB SOF
